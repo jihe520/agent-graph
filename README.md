@@ -4,6 +4,8 @@
 
 把 ADE（agent 开发环境）的主交互元素从「会话」换成「git graph」的一次交互探索。
 
+https://github.com/user-attachments/assets/123cfb00-07ef-4b2b-b531-33635909f158
+
 这个仓库不是一个应用，也不包含可以直接安装的功能实现，只有三样东西：
 
 | 文件 | 内容 |
