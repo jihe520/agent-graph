@@ -1,6 +1,6 @@
 # 标准提示词
 
-> 这份文件写给 agent。用法见 [README](README.md#使用)。
+> 这份文件写给 agent。用法见 [README](README.zh-CN.md#使用)。
 
 你在一个 ADE（agent 开发环境）的源码仓库里工作。任务是给这个 ADE 实现「以 git graph 为主视图」的交互模型。
 
