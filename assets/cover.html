@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Agent Graph · 封面</title>
+  <!--
+    Source of cover.png: the README cover and the repository's social preview, 1280×640 exported at 2x.
+    After editing, export it from this folder:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --window-size=1280,640 --force-device-scale-factor=2 --screenshot=cover.png cover.html
+    The graph on the right uses the marks, colours and sample data of ../index.html, drawn still.
+  -->
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+      color: #e8e9eb; background: #101215; font-synthesis: none; -webkit-font-smoothing: antialiased;
+      --text: #e8e9eb; --secondary: #a4a9b1; --muted: #6d737c;
+      --line: rgba(255,255,255,.075); --now: #15181c; --page: #101215;
+      --waiting: #f0b54a; --done: #86cf98; --del: #e78585;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .cover { position: relative; width: 1280px; height: 640px; overflow: hidden;
+      background: radial-gradient(560px 420px at 86% 22%, rgba(229,138,99,.09), transparent 70%),
+                  radial-gradient(520px 380px at 70% 92%, rgba(126,170,255,.07), transparent 70%), var(--page); }
+
+    .copy { position: absolute; left: 80px; top: 0; bottom: 0; width: 450px; display: flex; flex-direction: column; justify-content: center; }
+    .icon { display: block; width: 76px; height: 76px; margin-bottom: 30px; }
+    h1 { margin: 0; font-size: 66px; font-weight: 700; line-height: 1; letter-spacing: -.025em; color: #f1f2f4; }
+    .tag { margin: 22px 0 0; font-size: 29px; font-weight: 500; line-height: 1.5; color: #d9dbdf; }
+    .points { margin: 26px 0 0; padding: 0; list-style: none; font-size: 17px; line-height: 1.5; color: var(--secondary); }
+    .points li { display: flex; align-items: center; gap: 12px; }
+    .points li + li { margin-top: 8px; }
+    .points i { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    .files { display: flex; gap: 16px; margin-top: 40px; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
+    .files b { margin-right: 6px; font: 500 13.5px var(--mono); color: var(--secondary); }
+
+    /* The graph: native sizes of the prototype, zoomed; it fades out where history runs on. */
+    .shot { position: absolute; left: 572px; top: 52px; right: 0; bottom: 0; overflow: hidden;
+      -webkit-mask-image: linear-gradient(#000 calc(100% - 170px), transparent calc(100% - 10px));
+              mask-image: linear-gradient(#000 calc(100% - 170px), transparent calc(100% - 10px)); }
+    .graph { position: relative; width: 553px; zoom: 1.2; }
+    .lanes { position: absolute; left: 0; top: 0; z-index: 2; overflow: visible; }
+    .now { position: relative; border-radius: 12px; background: var(--now); box-shadow: inset 0 0 0 1px var(--line); }
+    .history { margin-top: 14px; }
+
+    .row { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 calc(var(--gx) + 2px); border-radius: 8px; font-size: 13px; }
+    .row.is-waiting { background: linear-gradient(90deg, rgba(240,181,74,.075), transparent 55%); }
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+    .l1, .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+    .who { font-weight: 600; }
+    .state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; flex-shrink: 0; }
+    .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .state em { font-style: normal; color: var(--muted); }
+    .state.waiting { color: var(--waiting); }
+    .state.done { color: var(--done); }
+    .task, .msg, .act, .ask { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .task { color: var(--secondary); }
+    .act { font: 11.5px/1.3 var(--mono); color: var(--muted); }
+    .ask { font-size: 12px; color: var(--waiting); }
+    .l2 .btn { margin-left: 2px; }
+    .btn { flex-shrink: 0; display: inline-grid; place-items: center; height: 22px; padding: 0 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: rgba(255,255,255,.07); }
+    .btn.allow { background: var(--waiting); color: #1d1606; }
+    .btn.merge { background: var(--done); color: #0d1a10; }
+    .meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; flex-shrink: 0; height: 19px; padding: 0 7px; border-radius: 6px; font: 500 11.5px var(--mono); color: color-mix(in srgb, var(--c) 78%, white); background: color-mix(in srgb, var(--c) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent); }
+    .tree { flex-shrink: 0; width: 9px; height: 9px; margin: -7px 0 0 4px; border-left: 1.5px solid rgba(255,255,255,.16); border-bottom: 1.5px solid rgba(255,255,255,.16); border-bottom-left-radius: 4px; }
+    .sub-name { flex-shrink: 0; font-size: 12.5px; font-weight: 500; }
+    .sub .act { font-size: 11px; }
+    .author { display: grid; place-items: center; flex-shrink: 0; width: 20px; }
+    .av { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: color-mix(in srgb, var(--c) 16%, transparent); }
+    .av svg { width: 14px; height: 14px; }
+    .av.human { border-radius: 50%; background: #34383f; color: #d4d7dc; font-size: 10px; font-weight: 600; }
+    .time { flex-shrink: 0; width: 30px; text-align: right; font-size: 12px; color: var(--muted); }
+    .gl-codex { font-family: var(--mono); font-weight: 700; letter-spacing: -.04em; }
+    .gl-pi { font-family: "Iowan Old Style", "Times New Roman", serif; font-weight: 600; }
+    .gl-human { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="copy">
+      <img class="icon" src="icon.svg" alt="">
+      <h1>Agent Graph</h1>
+      <p class="tag">把 ADE 的主交互元素<br>从「会话」换成「git graph」</p>
+      <ul class="points">
+        <li><i></i>agent 挂在它所在的分支和 worktree 上</li>
+        <li><i></i>等你的排在最前，批准、合并就地处理</li>
+        <li><i></i>会话在侧栏打开，graph 保持可见</li>
+      </ul>
+      <div class="files"><span><b>DESIGN.md</b>设计标准</span><span><b>PROMPT.md</b>标准提示词</span><span><b>index.html</b>参考原型</span></div>
+    </div>
+    <div class="shot"><div class="graph" id="graph"></div></div>
+  </div>
+
+  <script>
+    const LANE_W = 22, PAD = 12, GAP = 14, HEIGHT = { agent: 48, sub: 28, commit: 30 };
+    const NOW = '#15181c', PAGE = '#101215', WAITING = '#f0b54a', DONE = '#86cf98', TRUNK = '#a3abb8', HUMAN_DOT = '#c3c7cd';
+    const HARNESS = {
+      claude: { name: 'Claude Code', color: '#e58a63' },
+      codex: { name: 'Codex', color: '#7eaaff' },
+      pi: { name: 'Pi', color: '#79d1a6' },
+      human: { name: '你', color: '#d4d7dc' },
+    };
+    // Lanes left to right, coloured by the harness at work on each branch; main stays neutral.
+    const BRANCHES = { main: [0, TRUNK], 'fix/billing': [1, HARNESS.codex.color], 'feat/search-v2': [2, HARNESS.claude.color], 'refactor/tokens': [3, HARNESS.pi.color] };
+
+    // The "now" band, who needs you first: waiting, then done, then running, then you.
+    const BAND = [
+      { kind: 'agent', branch: 'fix/billing', harness: 'codex', status: 'waiting', time: '9m', task: '账单金额按行四舍五入', line2: '请求运行 prisma migrate dev' },
+      { kind: 'agent', branch: 'refactor/tokens', harness: 'pi', status: 'done', task: '组件迁移到 design tokens', line2: '38 个文件 · 测试通过' },
+      { kind: 'agent', branch: 'feat/search-v2', harness: 'claude', status: 'running', time: '26m', task: '重写搜索排序', line2: 'Edit src/search/rank.ts' },
+      { kind: 'sub', branch: 'feat/search-v2', harness: 'claude', name: 'Explore', line2: 'Grep "searchIndex(" · 14 处' },
+      { kind: 'agent', branch: 'main', harness: 'human', status: 'here' },
+    ];
+    // History, newest first. fork: the commit's parent is the next main commit below it.
+    const HISTORY = [
+      { branch: 'refactor/tokens', msg: 'refactor(tokens): migrate inputs', by: 'pi', age: '6m' },
+      { branch: 'feat/search-v2', msg: 'perf(search): cache tokenizer', by: 'claude', age: '40m' },
+      { branch: 'main', msg: 'docs: update README', by: 'human', age: '1h' },
+      { branch: 'fix/billing', msg: 'test(billing): rounding fixtures', by: 'codex', age: '3h' },
+      { branch: 'fix/billing', msg: 'fix(billing): round per line item', by: 'codex', age: '4h', fork: true },
+      { branch: 'main', msg: 'feat(api): rate limit headers', by: 'human', age: '6h' },
+      { branch: 'feat/search-v2', msg: 'feat(search): ranking signals', by: 'claude', age: '9h' },
+      { branch: 'refactor/tokens', msg: 'refactor(tokens): extract color scale', by: 'pi', age: '1d' },
+      { branch: 'feat/search-v2', msg: 'feat(search): new query parser', by: 'claude', age: '1d' },
+      { branch: 'main', msg: 'chore: release 1.3.0', by: 'human', age: '2d' },
+      { branch: 'refactor/tokens', msg: 'refactor(tokens): audit hard-coded colors', by: 'pi', age: '2d' },
+    ];
+
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const laneX = b => PAD + BRANCHES[b][0] * LANE_W + LANE_W / 2;
+    const color = b => BRANCHES[b][1];
+    const gx = PAD * 2 + Object.keys(BRANCHES).length * LANE_W;
+
+    // Marks, as index.html draws them.
+    function glyph(h, x, y, size, c) {
+      if (h === 'claude') {
+        const r = size * .3;
+        let d = '';
+        for (const deg of [0, 45, 90, 135]) {
+          const dx = Math.cos(deg * Math.PI / 180) * r, dy = Math.sin(deg * Math.PI / 180) * r;
+          d += `M${(x - dx).toFixed(2)} ${(y - dy).toFixed(2)}L${(x + dx).toFixed(2)} ${(y + dy).toFixed(2)}`;
+        }
+        return `<path d="${d}" stroke="${c}" stroke-width="${(size / 11).toFixed(2)}" stroke-linecap="round"/>`;
+      }
+      const [text, scale] = { codex: ['&gt;_', .5], pi: ['π', .74], human: ['你', .52] }[h];
+      return `<text class="gl-${h}" x="${x}" y="${y}" fill="${c}" font-size="${(size * scale).toFixed(1)}" text-anchor="middle" dominant-baseline="central">${text}</text>`;
+    }
+    const avatar = h => h === 'human' ? '<span class="av human">你</span>'
+      : `<span class="av" style="--c:${HARNESS[h].color}"><svg viewBox="0 0 16 16">${glyph(h, 8, 8, 16, HARNESS[h].color)}</svg></span>`;
+    const pill = b => `<span class="pill" style="--c:${color(b)}">${esc(b)}</span>`;
+    const badge = (x, y, c, d) => `<circle cx="${x}" cy="${y}" r="5" fill="${c}" stroke="${NOW}" stroke-width="1.5"/><path d="${d}" fill="none" stroke="${NOW}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    // The halo and the running arc move in the prototype; here each is caught in one frame.
+    function bead(r, x, y) {
+      const c = HARNESS[r.harness].color;
+      if (r.kind === 'sub') return `<circle cx="${x}" cy="${y}" r="6.5" fill="${NOW}"/><circle cx="${x}" cy="${y}" r="4.5" fill="${c}"/>`;
+      if (r.harness === 'human') return `<circle cx="${x}" cy="${y}" r="10" fill="${c}" stroke="${NOW}" stroke-width="3"/>${glyph('human', x, y, 20, NOW)}`;
+      const R = 11, quiet = r.status === 'done';
+      let s = '';
+      if (r.status === 'waiting') s += `<circle cx="${x}" cy="${y}" r="${R + 5}" fill="none" stroke="${WAITING}" stroke-width="2.4" opacity=".42"/>`;
+      s += `<circle cx="${x}" cy="${y}" r="${R}" fill="${NOW}" stroke="${quiet ? '#5c626b' : c}" stroke-width="1.6"/>`;
+      if (r.status === 'running') {
+        const rr = R + 4, C = 2 * Math.PI * rr;
+        s += `<circle cx="${x}" cy="${y}" r="${rr}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="${(C * .22).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-105 ${x} ${y})"/>`;
+      }
+      s += glyph(r.harness, x, y, R * 2, quiet ? '#9097a0' : c);
+      const bx = x + R * .75;
+      if (r.status === 'done') s += badge(bx, y + R * .75, DONE, `M${bx - 2} ${y + R * .75}l1.4 1.4 2.6-2.8`);
+      if (r.status === 'waiting') s += badge(bx, y - R * .75, WAITING, `M${bx} ${y - R * .75 - 2.2}v2.3m0 1.9v.1`);
+      return s;
+    }
+
+    function rowHTML(r) {
+      const open = (cls, h) => `<div class="row ${cls}" style="height:${h}px">`;
+      if (r.kind === 'commit') {
+        return open('commit', HEIGHT.commit) + `<div class="main"><div class="l1">${r.head ? pill(r.branch) : ''}<span class="msg">${esc(r.msg)}</span></div></div>`
+          + `<span class="author">${avatar(r.by)}</span><span class="time">${r.age}</span></div>`;
+      }
+      if (r.kind === 'sub') {
+        return open('sub', HEIGHT.sub) + `<div class="main"><div class="l1"><span class="tree"></span>`
+          + `<span class="sub-name" style="color:${HARNESS[r.harness].color}">${r.name}</span><span class="act">${esc(r.line2)}</span></div></div></div>`;
+      }
+      const h = HARNESS[r.harness];
+      if (r.harness === 'human') {
+        return open('agent', HEIGHT.agent) + `<div class="main"><div class="l1"><span class="who">你</span><span class="task">在这里</span></div></div><div class="meta">${pill(r.branch)}</div></div>`;
+      }
+      const label = { waiting: '等你', done: '完成', running: '运行中' }[r.status];
+      const line2 = r.status === 'waiting'
+        ? `<span class="ask">${esc(r.line2)}</span><span class="btn allow">允许</span><span class="btn">拒绝</span>`
+        : `<span class="act">${esc(r.line2)}</span>${r.status === 'done' ? '<span class="btn merge">合并</span>' : ''}`;
+      return open(`agent is-${r.status}`, HEIGHT.agent) + `<div class="main">`
+        + `<div class="l1"><span class="who" style="color:${h.color}">${h.name}</span>`
+        + `<span class="state ${r.status}"${r.status === 'running' ? ` style="color:${h.color}"` : ''}>${label}${r.time ? ` <em>${r.time}</em>` : ''}</span>`
+        + `<span class="task">${esc(r.task)}</span></div><div class="l2">${line2}</div></div><div class="meta">${pill(r.branch)}</div></div>`;
+    }
+
+    // Rows top to bottom with their centre lines, then the lanes under their marks.
+    const rows = [];
+    let y = 0;
+    BAND.forEach(r => { const h = HEIGHT[r.kind]; rows.push({ ...r, band: true, y: y + h / 2 }); y += h; });
+    y += GAP;
+    const seen = new Set();
+    HISTORY.forEach(c => { rows.push({ ...c, kind: 'commit', head: !seen.has(c.branch), y: y + HEIGHT.commit / 2 }); seen.add(c.branch); y += HEIGHT.commit; });
+    const bottom = y + 40;
+
+    const path = (d, c, extra = '') => `<path d="${d}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"${extra}/>`;
+    const curve = (x1, y1, x2, y2) => { const m = (y1 + y2) / 2; return `C${x1} ${m} ${x2} ${m} ${x2} ${y2}`; };
+    const commits = rows.filter(r => r.kind === 'commit');
+    let edges = '', marks = '';
+    commits.forEach((c, i) => {
+      const x = laneX(c.branch), below = commits.slice(i + 1);
+      const parent = c.fork ? below.find(o => o.branch === 'main') : below.find(o => o.branch === c.branch);
+      if (!parent) edges += path(`M${x} ${c.y}V${bottom}`, color(c.branch));
+      else if (parent.branch === c.branch) edges += path(`M${x} ${c.y}V${parent.y}`, color(c.branch));
+      else { const cy = Math.max(c.y, parent.y - HEIGHT.commit); edges += path(`M${x} ${c.y}V${cy}${curve(x, cy, laneX(parent.branch), parent.y)}`, color(c.branch)); }
+      marks += `<circle cx="${x}" cy="${c.y}" r="4.3" fill="${c.by === 'human' ? HUMAN_DOT : HARNESS[c.by].color}" stroke="${PAGE}" stroke-width="2"/>`;
+    });
+    // In the band each branch's rows share its lane; a dashed line drops from the last of them to the branch's head commit.
+    for (const b of Object.keys(BRANCHES)) {
+      const list = rows.filter(r => r.band && r.branch === b), head = commits.find(c => c.branch === b);
+      if (!list.length) continue;
+      for (let i = 1; i < list.length; i++) edges += path(`M${laneX(b)} ${list[i - 1].y}V${list[i].y}`, color(b));
+      edges += path(`M${laneX(b)} ${list[list.length - 1].y}V${head.y}`, color(b), ' stroke-dasharray="2 5" stroke-width="1.6"');
+    }
+    rows.filter(r => r.band).forEach(r => { marks += bead(r, laneX(r.branch), r.y); });
+
+    const graph = document.getElementById('graph');
+    graph.style.setProperty('--gx', `${gx}px`);
+    graph.innerHTML = `<svg class="lanes" width="${gx}" height="${bottom}" viewBox="0 0 ${gx} ${bottom}">${edges}${marks}</svg>`
+      + `<div class="now">${rows.filter(r => r.band).map(rowHTML).join('')}</div>`
+      + `<div class="history">${rows.filter(r => !r.band).map(rowHTML).join('')}</div>`;
+  </script>
+</body>
+</html>

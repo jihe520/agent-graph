@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Agent Graph</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c2026"/>
+      <stop offset="1" stop-color="#101215"/>
+    </linearGradient>
+    <!-- main fades out below the fork, the way folded history does in the graph -->
+    <linearGradient id="history" x1="0" y1="50" x2="0" y2="63" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a3abb8"/>
+      <stop offset="1" stop-color="#a3abb8" stop-opacity="0"/>
+    </linearGradient>
+    <!-- the running arc caught mid-turn: bright at its head, fading toward its tail -->
+    <linearGradient id="spin" x1="25.4" y1="0" x2="51.78" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e58a63" stop-opacity="0"/>
+      <stop offset=".35" stop-color="#e58a63" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#e58a63"/>
+    </linearGradient>
+    <!-- lanes stop short of the marks on them -->
+    <mask id="gaps">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="#000">
+        <circle cx="39" cy="24" r="9.7"/>
+        <circle cx="19" cy="50" r="6.5"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#tile)"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#fff" stroke-opacity=".09"/>
+  <g fill="none" stroke-width="4.6" stroke-linecap="round" mask="url(#gaps)">
+    <path d="M19 12V62" stroke="url(#history)"/>
+    <path d="M39 24V31C39 40.5 19 40.5 19 50" stroke="#e58a63"/>
+  </g>
+  <path d="M27.22 30.8A13.6 13.6 0 1 1 51.78 19.35" fill="none" stroke="url(#spin)" stroke-width="3.6" stroke-linecap="round"/>
+  <circle cx="19" cy="50" r="4.8" fill="#a3abb8"/>
+  <circle cx="39" cy="24" r="8" fill="#e58a63"/>
+</svg>

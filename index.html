@@ -1,0 +1,2640 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Agent Graph · 设计探索</title>
+  <!-- The drawing in assets/icon.svg, inlined so this file still opens on its own. -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='tile' x1='0' y1='0' x2='0' y2='64' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%231c2026'/%3E%3Cstop offset='1' stop-color='%23101215'/%3E%3C/linearGradient%3E%3ClinearGradient id='history' x1='0' y1='50' x2='0' y2='63' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23a3abb8'/%3E%3Cstop offset='1' stop-color='%23a3abb8' stop-opacity='0'/%3E%3C/linearGradient%3E%3ClinearGradient id='spin' x1='25.4' y1='0' x2='51.78' y2='0' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23e58a63' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%23e58a63' stop-opacity='.35'/%3E%3Cstop offset='1' stop-color='%23e58a63'/%3E%3C/linearGradient%3E%3Cmask id='gaps'%3E%3Crect width='64' height='64' fill='%23fff'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='39' cy='24' r='9.7'/%3E%3Ccircle cx='19' cy='50' r='6.5'/%3E%3C/g%3E%3C/mask%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23tile)'/%3E%3Crect x='.5' y='.5' width='63' height='63' rx='13.5' fill='none' stroke='%23fff' stroke-opacity='.09'/%3E%3Cg fill='none' stroke-width='4.6' stroke-linecap='round' mask='url(%23gaps)'%3E%3Cpath d='M19 12V62' stroke='url(%23history)'/%3E%3Cpath d='M39 24V31C39 40.5 19 40.5 19 50' stroke='%23e58a63'/%3E%3C/g%3E%3Cpath d='M27.22 30.8A13.6 13.6 0 1 1 51.78 19.35' fill='none' stroke='url(%23spin)' stroke-width='3.6' stroke-linecap='round'/%3E%3Ccircle cx='19' cy='50' r='4.8' fill='%23a3abb8'/%3E%3Ccircle cx='39' cy='24' r='8' fill='%23e58a63'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+      color: #e8e9eb; background: #101215; font-synthesis: none; -webkit-font-smoothing: antialiased;
+      --text: #e8e9eb; --secondary: #a4a9b1; --muted: #6d737c;
+      --line: rgba(255,255,255,.075); --hover: rgba(255,255,255,.035); --now: #15181c; --page: #101215;
+      --waiting: #f0b54a; --done: #86cf98; --del: #e78585;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --gx: 160px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #8ea7ef; outline-offset: 2px; }
+
+    .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 18px; background: rgba(16,18,21,.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    .projects { display: flex; align-items: center; gap: 2px; margin-right: 6px; }
+    .projects > svg { width: 16px; height: 16px; margin: 0 6px 0 2px; fill: none; stroke: var(--secondary); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .projects button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+    .projects button:hover { color: var(--secondary); background: var(--hover); }
+    .projects button[aria-pressed="true"] { color: var(--text); font-weight: 600; background: rgba(255,255,255,.07); }
+    .projects .n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; color: #1d1606; background: var(--waiting); }
+    .projects .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--secondary); }
+    .sum { display: flex; gap: 2px; }
+    .sum button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-size: 12px; color: var(--secondary); }
+    .sum button:hover { background: var(--hover); color: var(--text); }
+    .sum i { width: 7px; height: 7px; border-radius: 50%; }
+    .spacer { flex: 1; }
+    .harness { display: flex; gap: 2px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; color: var(--secondary); }
+    .chip:hover { background: var(--hover); }
+    .chip[aria-pressed="false"] { opacity: .4; }
+    .chip svg { width: 14px; height: 14px; }
+    .sep { width: 1px; height: 18px; margin: 0 6px; background: var(--line); }
+    .seg { display: inline-flex; padding: 2px; border-radius: 9px; background: rgba(255,255,255,.035); }
+    .seg button { height: 24px; padding: 0 10px; border-radius: 7px; font-size: 12px; color: var(--muted); }
+    .seg button[aria-pressed="true"] { background: rgba(255,255,255,.085); color: var(--text); }
+    .toggle { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; color: var(--muted); }
+    .toggle:hover { color: var(--secondary); }
+    .toggle[aria-pressed="true"] { color: var(--text); background: rgba(255,255,255,.06); }
+    .live[aria-pressed="true"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #e5534b; vertical-align: 1px; animation: beat 1.4s ease-in-out infinite; }
+
+    /* --legend-h: the open legend's height, so the end of the page can still scroll out from under it. */
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 18px calc(80px + var(--legend-h, 0px)); }
+    .graph { position: relative; }
+    .lanes { position: absolute; left: 0; top: 0; z-index: 4; overflow: visible; pointer-events: none; }
+    /* Marks of rows that slide down while others rise past them: under the rising rows (z 3), over their own (z 1). */
+    .lanes.sunk { z-index: 2; }
+    /* The band's background is a layer of its own, so when rows come or go it trails them (--lag) instead of jumping. */
+    .now { position: relative; border-radius: 12px; }
+    .now::before { content: ""; position: absolute; inset: 0 0 var(--lag, 0px); border-radius: inherit; background: var(--now); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }
+    .row { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 calc(var(--gx) + 2px); border-radius: 8px; font-size: 13px; }
+    /* Row highlights are image layers, which leaves background-color free for .moving below. */
+    .row.is-waiting { background: linear-gradient(90deg, rgba(240,181,74,.075), transparent 55%); }
+    .row:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+    .l1, .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+    .who { font-weight: 600; }
+    .role { padding: 1px 5px; border-radius: 5px; font-size: 11px; color: var(--secondary); background: rgba(255,255,255,.06); }
+    .state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; flex-shrink: 0; }
+    .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .state em { font-style: normal; color: var(--muted); }
+    .state.waiting { color: var(--waiting); }
+    .state.done { color: var(--done); }
+    .task, .msg, .act, .ask { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .task { color: var(--secondary); }
+    .act { font: 11.5px/1.3 var(--mono); color: var(--muted); }
+    .ask { font-size: 12px; color: var(--waiting); }
+    .l2 .btn { margin-left: 2px; }
+    .btn { flex-shrink: 0; height: 22px; padding: 0 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: rgba(255,255,255,.07); }
+    .btn:hover { background: rgba(255,255,255,.12); }
+    .btn.allow { background: var(--waiting); color: #1d1606; }
+    .btn.merge { background: var(--done); color: #0d1a10; }
+    .btn.allow:hover, .btn.merge:hover { filter: brightness(1.08); }
+    .btn[aria-disabled="true"] { opacity: .4; cursor: default; filter: none; }
+    .meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; flex-shrink: 0; height: 19px; padding: 0 7px; border-radius: 6px; font: 500 11.5px var(--mono); color: color-mix(in srgb, var(--c) 78%, white); background: color-mix(in srgb, var(--c) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent); }
+    .pill.tag { color: var(--secondary); background: none; box-shadow: inset 0 0 0 1px var(--line); }
+    .pill svg { width: 11px; height: 11px; margin: 0 4px 0 -1px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+    .wt, .behind, .pr, .diff { display: inline-flex; align-items: center; gap: 4px; font: 11.5px var(--mono); }
+    .wt svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+    .pr { color: var(--secondary); }
+    .add { color: var(--done); }
+    .del { color: var(--del); }
+    .tree { flex-shrink: 0; width: 9px; height: 9px; margin: -7px 0 0 4px; border-left: 1.5px solid rgba(255,255,255,.16); border-bottom: 1.5px solid rgba(255,255,255,.16); border-bottom-left-radius: 4px; }
+    .sub-name { flex-shrink: 0; font-size: 12.5px; font-weight: 500; }
+    .sub .act { font-size: 11px; }
+    .author { display: grid; place-items: center; flex-shrink: 0; width: 20px; }
+    .av { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: color-mix(in srgb, var(--c) 16%, transparent); }
+    .av svg { width: 14px; height: 14px; }
+    .av.human { border-radius: 50%; background: #34383f; color: #d4d7dc; font-size: 10px; font-weight: 600; }
+    .time { flex-shrink: 0; width: 38px; text-align: right; font-size: 12px; color: var(--muted); }
+    .sha { flex-shrink: 0; width: 58px; font: 11.5px var(--mono); color: var(--muted); }
+    .gl-codex { font-family: var(--mono); font-weight: 700; letter-spacing: -.04em; }
+    .gl-pi { font-family: "Iowan Old Style", "Times New Roman", serif; font-weight: 600; }
+    .gl-human { font-weight: 600; }
+
+    /* Projects. 全部 puts them side by side, one column each, and scrolls sideways when they do not fit. */
+    .wrap.cols { max-width: none; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(420px, 1fr); gap: 20px; align-items: start; overflow-x: auto; scroll-padding: 0 18px; }
+    .project { min-width: 0; container: project / inline-size; }
+    .main { container: text / inline-size; }
+    .phead { display: flex; align-items: center; gap: 10px; height: 28px; margin-bottom: 8px; padding: 0 14px 0 4px; white-space: nowrap; }
+    .pname { flex-shrink: 0; font-size: 14px; font-weight: 600; }
+    button.pname:hover { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+    .ppath { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 11.5px var(--mono); color: var(--muted); }
+    .pstats { display: flex; flex-shrink: 0; gap: 12px; margin-left: auto; font-size: 12px; color: var(--muted); }
+    .pstats span { display: inline-flex; align-items: center; gap: 5px; }
+    .pstats i { width: 6px; height: 6px; border-radius: 50%; }
+    .pnew { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; font-size: 12px; color: var(--secondary); box-shadow: inset 0 0 0 1px var(--line); }
+    .pnew:hover { color: var(--text); background: var(--hover); }
+    .pnew svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+    .row.more { gap: 10px; font-size: 12px; color: var(--muted); }
+    .row.more:hover { background-image: none; }
+    .link { font-size: 12px; color: var(--secondary); }
+    .link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* Worktree rows head each group of agents in the "now" band. */
+    .now .wt-row:not(:first-child)::before { content: ""; position: absolute; top: 0; left: calc(var(--gx) + 2px); right: 14px; height: 1px; background: var(--line); }
+    .wt-name { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font: 500 12px var(--mono); color: var(--secondary); }
+    .wt-name svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+    .wt-row.is-merged .wt-name { color: var(--muted); }
+    .clean, .idle { font-size: 12px; color: var(--muted); }
+    .pill > span, .wt-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Narrow project columns: drop the sha and path labels; branch pills shorten with an ellipsis, worktree names never do. */
+    @container project (max-width: 640px) {
+      .sha, .wt { display: none; }
+      .l1 { overflow: hidden; }
+      /* Shrink factor 1, not less: below 1 flexbox only absorbs part of the overflow. */
+      .l1 .pill { flex-shrink: 1; min-width: 0; }
+      /* In commit rows the message gives way instead; a long branch pill is capped at half the line. */
+      .commit .l1 .pill { flex-shrink: 0; max-width: 50%; }
+      .meta .pill { max-width: 150px; }
+      .row.agent .meta { flex-shrink: 1; min-width: 0; overflow: hidden; }
+    }
+    /* A worktree row whose text column is very narrow drops the PR number and behind-main count first. */
+    @container text (max-width: 250px) {
+      .wt-row .pr, .wt-row .behind { display: none; }
+    }
+
+    /* Conversation panel: the graph stays the main view; picking an agent opens its transcript and a prompt box on the right. */
+    :root { --panel-w: clamp(360px, 30vw, 460px); }
+    body.chatting .stage { padding-right: var(--panel-w); }
+    .row { scroll-margin: 64px 0 16px; }
+    .row.agent[data-a], .row.sub { cursor: pointer; }
+    .row.sel, .row.sel:hover { background-image: linear-gradient(rgba(255,255,255,.075), rgba(255,255,255,.075)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+    .row.spot { background-image: linear-gradient(rgba(142,167,239,.15), rgba(142,167,239,.15)); }
+    .panel { position: fixed; z-index: 9; top: 52px; right: 0; bottom: 0; width: var(--panel-w); display: flex; flex-direction: column; background: #131619; border-left: 1px solid var(--line); }
+    .panel[hidden], .panel [hidden] { display: none; }
+    .ph { flex-shrink: 0; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line); }
+    .ph1 { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0; font-size: 13px; white-space: nowrap; }
+    .x { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px; color: var(--muted); }
+    .x:hover { color: var(--text); background: var(--hover); }
+    .x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+    .ph1 .x { margin-left: auto; }
+    .back { flex-shrink: 0; height: 24px; margin-left: -6px; padding: 0 6px; border-radius: 6px; color: var(--secondary); }
+    .back:hover { color: var(--text); background: var(--hover); }
+    .crumb { color: var(--muted); }
+    .ph-task { margin: 6px 24px 0 0; font-size: 14.5px; font-weight: 600; line-height: 1.45; }
+    .ph-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 8px; overflow: hidden; font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .ph-ctx .pill { flex-shrink: 1; min-width: 0; }
+    .msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+    .m { flex-shrink: 0; min-width: 0; font-size: 13px; line-height: 1.6; }
+    .m.user { align-self: flex-end; max-width: 88%; }
+    .m.user.from { align-self: stretch; max-width: none; }
+    .bubble { padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: rgba(255,255,255,.075); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .m.from .bubble { border-radius: 4px 12px 12px 12px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); }
+    .from-l { margin-bottom: 4px; font-size: 11.5px; color: var(--muted); }
+    .m.text { color: #d9dbdf; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .m.tool { display: flex; align-items: baseline; gap: 8px; font: 11.5px/1.5 var(--mono); color: var(--muted); }
+    .m.tool + .m.tool { margin-top: -8px; }
+    .m.tool::before { content: ""; align-self: center; flex-shrink: 0; width: 5px; height: 5px; margin: 0 2px; border-radius: 50%; background: #454a52; }
+    .m.tool.live::before { width: 9px; height: 9px; margin: 0; border: 1.5px solid var(--c); border-right-color: transparent; background: none; animation: spin .9s linear infinite; }
+    .m.tool .tn { flex-shrink: 0; color: var(--secondary); }
+    .m.tool .ta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .m.tool .to { flex-shrink: 0; }
+    .m.commit, .m.spawn { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; text-align: left; box-shadow: inset 0 0 0 1px var(--line); }
+    .m.commit:hover, .m.spawn:hover { background: var(--hover); }
+    .m.commit i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
+    .m .lbl { flex-shrink: 0; font-size: 11.5px; color: var(--muted); }
+    .m .cmsg, .m .sact { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .m .csha, .m .sact { font: 11.5px var(--mono); color: var(--muted); }
+    .m .csha, .m .chev { flex-shrink: 0; color: var(--muted); }
+    .m.ask { padding: 10px 12px; border-radius: 10px; background: rgba(240,181,74,.07); box-shadow: inset 0 0 0 1px rgba(240,181,74,.24); }
+    .m.ask .ask-t { font-size: 12.5px; color: var(--waiting); }
+    .m.ask code { display: block; margin-top: 4px; font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+    .m.ask .ask-b { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .m.ask.resolved { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+    .m.ask.resolved .ask-t { color: var(--secondary); }
+    .m .res { font-size: 12px; color: var(--muted); }
+    .m.note { align-self: center; font-size: 12px; color: var(--muted); }
+    .composer { flex-shrink: 0; margin: 0 12px 12px; padding: 10px 8px 8px 12px; border-radius: 12px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+    .composer:focus-within { box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+    .composer textarea { display: block; width: 100%; min-height: 21px; max-height: 168px; padding: 0 4px 0 0; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: inherit; font-size: 13px; line-height: 1.6; }
+    .composer textarea::placeholder { color: var(--muted); }
+    .cbar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .cbar .hint { font-size: 11px; color: var(--muted); }
+    .send { display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; border-radius: 8px; color: #101215; background: var(--text); }
+    .send:disabled { opacity: .22; cursor: default; }
+    .send svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .ended { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 12px; padding: 12px 14px; border-radius: 12px; font-size: 12.5px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+
+    /* 改动 tab: what the worktree's branch changes against main, the review on it, and the merge decision under it. */
+    .tabs { display: flex; gap: 4px; margin: 6px 0 -12px -8px; }
+    .tab { position: relative; height: 34px; padding: 0 8px; font-size: 12.5px; color: var(--muted); }
+    .tab:hover { color: var(--secondary); }
+    .tab[aria-selected="true"] { color: var(--text); }
+    .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; border-radius: 1px; background: var(--text); }
+    .tab .n { margin-left: 5px; font: 11px var(--mono); color: var(--muted); }
+    .tab .flag { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--waiting); vertical-align: 1px; }
+    .review { gap: 14px; }
+    .review > * { flex-shrink: 0; }
+    .rv-sum { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--secondary); white-space: nowrap; }
+    .rv-sum .base { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
+    .rv-h { margin-bottom: 6px; font-size: 11.5px; color: var(--muted); }
+    .rv-empty { font-size: 12.5px; color: var(--muted); }
+    .rv-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--line); }
+    .rv-rev { background: rgba(126,170,255,.045); box-shadow: inset 0 0 0 1px rgba(126,170,255,.2); }
+    .rv-bh { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; white-space: nowrap; }
+    .rv-n { margin-left: auto; font-size: 12px; color: var(--muted); }
+    /* A comment: where it is on one line, what it says under it; once handled it folds to one quiet line. */
+    .rv-c { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin: 0 -6px; padding: 5px 6px; border-radius: 6px; line-height: 1.5; text-align: left; }
+    .rv-c:hover { background: var(--hover); }
+    .rv-k { display: flex; align-items: center; gap: 6px; }
+    .rv-at { font: 11.5px var(--mono); color: var(--waiting); white-space: nowrap; }
+    .rv-t { color: #d9dbdf; }
+    .rv-c.done .rv-at { color: var(--muted); }
+    .rv-c.done .rv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .rv-ok { margin-left: 6px; font-size: 11.5px; color: var(--done); white-space: nowrap; }
+    .rv-k .rv-ok { margin-left: 0; }
+    .rv-bf { display: flex; align-items: center; margin-top: 6px; }
+    .rv-note { font-size: 12px; color: var(--muted); }
+    .rv-dirty { flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
+    .rv-dirty .rv-at { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-family: inherit; font-size: 12px; }
+    .rv-dirty .btn { margin-left: auto; }
+    .rv-list { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+    .rv-f + .rv-f, .rv-cm + .rv-cm { border-top: 1px solid var(--line); }
+    .rv-fh, .rv-cm { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; font-size: 12.5px; text-align: left; }
+    .rv-fh:hover, .rv-cm:hover { background: var(--hover); }
+    .st { flex-shrink: 0; width: 16px; height: 16px; border-radius: 4px; font: 600 10px/16px var(--mono); text-align: center; }
+    .st-A { color: var(--done); background: rgba(134,207,152,.14); }
+    .st-M { color: #e5c07b; background: rgba(229,192,123,.13); }
+    .st-D { color: var(--del); background: rgba(231,133,133,.14); }
+    .fp { flex: 1; min-width: 0; display: flex; font: 12px var(--mono); white-space: nowrap; }
+    .fd { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+    .fn { flex-shrink: 0; color: var(--text); }
+    .fc { flex-shrink: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; color: #1d1606; background: var(--waiting); }
+    .fc.done { color: var(--muted); background: rgba(255,255,255,.08); }
+    .rv-fh .diff { flex-shrink: 0; }
+    .dstat { flex-shrink: 0; display: inline-flex; gap: 1px; }
+    .dstat i { width: 6px; height: 6px; border-radius: 1px; background: rgba(255,255,255,.12); }
+    .dstat i.a { background: var(--done); }
+    .dstat i.d { background: var(--del); }
+    .rv-fh .chev { flex-shrink: 0; width: 8px; color: var(--muted); transition: transform .15s; }
+    .rv-f.open .chev { transform: rotate(90deg); }
+    /* The diff scrolls sideways as one block; comments stay at the visible width. */
+    .dv { container-type: inline-size; overflow-x: auto; border-top: 1px solid var(--line); background: rgba(0,0,0,.2); font: 11.5px/1.7 var(--mono); }
+    .dv-in { display: inline-block; min-width: 100%; padding: 4px 0 6px; }
+    .dh { padding: 0 12px; color: var(--muted); }
+    .dl { display: flex; white-space: pre; }
+    .dl .ln { flex-shrink: 0; width: 38px; padding-right: 8px; text-align: right; color: #50565f; user-select: none; }
+    .dl .sg { flex-shrink: 0; width: 14px; color: var(--muted); user-select: none; }
+    .dl .dt { padding-right: 14px; color: #d4d7dc; }
+    .dl.a { background: rgba(134,207,152,.09); }
+    .dl.a .sg { color: var(--done); }
+    .dl.d { background: rgba(231,133,133,.09); }
+    .dl.d .sg { color: var(--del); }
+    .dl.d .dt { color: #c7b0b0; }
+    .dx { padding: 6px 12px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; font-size: 12px; color: var(--muted); }
+    .dcm { position: sticky; left: 0; display: flex; gap: 8px; box-sizing: border-box; width: calc(100cqw - 24px); margin: 4px 12px 6px; padding: 8px 10px; border-radius: 8px; font: 12.5px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; white-space: normal; color: #d9dbdf; background: #1d2126; box-shadow: inset 0 0 0 1px rgba(240,181,74,.3); }
+    .dcm.done { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+    .dcm .av { flex-shrink: 0; margin-top: 1px; }
+    .dcm-t { min-width: 0; }
+    .dcm-t b { font-weight: 600; color: var(--text); }
+    .rv-cm i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
+    .rv-cm .cmsg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rv-cm .csha { flex-shrink: 0; font: 11.5px var(--mono); color: var(--muted); }
+    .decide { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 10px; padding: 9px 9px 9px 14px; border-radius: 12px; background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px var(--line); }
+    .dz-l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .dz { font-size: 12.5px; color: var(--secondary); }
+    .dz.ok { color: var(--done); }
+    .dz-w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--waiting); }
+    .dz-w.quiet { color: var(--muted); }
+    .decide .btn { height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; }
+
+    /* New task: the panel before there is a conversation. Its header already reads like the conversation it becomes. */
+    .draft { gap: 18px; }
+    .draft > * { flex-shrink: 0; }
+    .nt-hs { display: flex; gap: 6px; }
+    .nt-h { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; height: 36px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; color: var(--secondary); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--line); }
+    .nt-h:hover { color: var(--text); background: var(--hover); }
+    .nt-h[aria-pressed="true"] { color: var(--text); background: color-mix(in srgb, var(--c) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 65%, transparent); }
+    .nt-at { display: flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 10px; border-radius: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--line); }
+    .nt-at .pill { flex-shrink: 1; min-width: 0; }
+    .nt-at .nt-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .nt-f, .nt-f .rv-h { display: block; }
+    .nt-in { display: block; width: 100%; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; outline: 0; font: 12.5px var(--mono); color: var(--text); background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+    .nt-in:focus { box-shadow: inset 0 0 0 1px rgba(255,255,255,.26); }
+    .nt-in.bad { box-shadow: inset 0 0 0 1px rgba(231,133,133,.6); }
+    .nt-err { margin-bottom: 8px; font-size: 12px; color: var(--del); }
+    .nt-cmd { display: block; padding: 8px 10px; border-radius: 8px; font: 11.5px/1.6 var(--mono); color: var(--secondary); background: rgba(0,0,0,.22); overflow-wrap: anywhere; }
+    .nt-tip { font-size: 12px; line-height: 1.6; color: var(--muted); }
+    .state.draft { color: var(--muted); }
+    .state.draft::before { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
+    .ph-task.empty { color: var(--muted); font-weight: 500; }
+    /* In the graph a task you are still writing is an outline: its rows say so, its marks and lane are dashed. */
+    .row[data-draft] { cursor: text; }
+    .row.ghost .task.empty, .row .note-l { font-size: 12px; color: var(--muted); }
+    .row.from { background-image: linear-gradient(rgba(255,255,255,.05), rgba(255,255,255,.05)); }
+
+    /* Right-click menu with the quick git actions; the row it was opened on keeps an outline while it is open. */
+    .row.ctx { background-image: linear-gradient(rgba(142,167,239,.07), rgba(142,167,239,.07)); box-shadow: inset 0 0 0 1.5px rgba(142,167,239,.5); }
+    .menu { position: fixed; z-index: 12; min-width: 236px; max-width: 340px; padding: 5px; border-radius: 10px; font-size: 13px; background: rgba(30,33,38,.98); backdrop-filter: blur(16px); box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 14px 36px rgba(0,0,0,.55); outline: none; }
+    .menu[hidden] { display: none; }
+    .menu-h { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; padding: 5px 8px 9px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .menu-h .pill { flex-shrink: 1; min-width: 0; }
+    .menu-h .mono { flex-shrink: 0; font: 11.5px var(--mono); color: var(--secondary); }
+    .menu-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .mi { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; height: 30px; padding: 0 10px; border-radius: 6px; text-align: left; color: var(--text); }
+    .mi:hover, .mi:focus-visible { outline: none; background: rgba(142,167,239,.18); }
+    .mi[aria-disabled="true"] { cursor: default; color: var(--muted); }
+    .mi[aria-disabled="true"]:hover { background: none; }
+    .mi-r { flex-shrink: 0; font-size: 12px; color: var(--muted); }
+    .mi-r .mono { font: 11.5px var(--mono); }
+    .mi.danger:not([aria-disabled="true"]) { color: #f0a3a3; }
+    .mi.danger.on { color: #1d0c0c; background: var(--del); }
+    .mi.danger.on .mi-r { color: rgba(29,12,12,.7); }
+    .menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+    .toast { position: fixed; z-index: 11; top: 64px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: min(640px, 90vw); padding: 8px 14px; border-radius: 10px; font-size: 12.5px; color: var(--text); background: #1d2126; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 10px 28px rgba(0,0,0,.5); opacity: 0; transform: translate(-50%, -6px); pointer-events: none; transition: opacity .18s, transform .18s; }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    body.chatting .toast { left: calc((100vw - var(--panel-w)) / 2); }
+    .toast code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); color: var(--secondary); }
+
+    /* Legend: what the marks and lines mean. It floats in the graph's bottom-right corner, clear of the conversation panel. */
+    .legend { position: fixed; z-index: 8; right: 16px; bottom: 16px; width: 460px; max-width: calc(100vw - 32px); padding: 8px 10px 12px 14px; border-radius: 12px; font-size: 12px; color: var(--secondary); background: rgba(21,24,28,.94); backdrop-filter: blur(10px); box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 12px 32px rgba(0,0,0,.45); }
+    body.chatting .legend { right: calc(var(--panel-w) + 16px); max-width: calc(100vw - var(--panel-w) - 32px); }
+    .lg-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .lg-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 16px; margin-right: 4px; }
+    .lg-sec { margin: 6px 0 2px; font-size: 11px; color: var(--muted); }
+    .lg-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .lg-item { display: flex; align-items: center; gap: 6px; min-height: 24px; line-height: 1.35; }
+    .lg-s { flex-shrink: 0; display: grid; place-items: center; min-width: 30px; height: 24px; }
+    .lg-s > svg { width: 24px; height: 24px; overflow: visible; }
+    .lg-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 4px 0 0; padding-top: 8px; border-top: 1px solid var(--line); }
+    .lg-colors span { display: inline-flex; align-items: center; gap: 5px; }
+    .lg-colors i { width: 12px; height: 3px; border-radius: 2px; }
+    .lg-tip { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+
+    @media (max-width: 820px) {
+      :root { --panel-w: 100vw; }
+      body.chatting .stage { padding-right: 0; }
+      body.chatting .legend { display: none; }
+    }
+
+    .graph [data-b] { transition: opacity .15s ease; }
+    .graph.focusing [data-b]:not(.on) { opacity: .16; }
+    .graph.focusing .row[data-b]:not(.on) { opacity: .32; }
+    .graph .off { opacity: .14 !important; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes halo { from { transform: scale(1); opacity: .8; } to { transform: scale(1.9); opacity: 0; } }
+    @keyframes beat { 50% { opacity: .35; } }
+    @keyframes enter { from { opacity: 0; transform: translateY(-4px); } }
+    @keyframes pop { from { transform: scale(0); } }
+    .spin, .halo, .pop { transform-box: fill-box; transform-origin: center; }
+    .spin { animation: spin 1.6s linear infinite; }
+    .halo { animation: halo 1.8s ease-out infinite; }
+    .beat { animation: beat 1.4s ease-in-out infinite; }
+    .pop { animation: pop .45s cubic-bezier(.2, 1.5, .4, 1); }
+    .row.fresh { animation: enter .45s ease-out; }
+    /* Rows sliding to a new place (see frame()): opaque, so they read cleanly as they pass each other, rising ones on top. */
+    .graph .row.moving { z-index: 1; background-color: var(--page); }
+    .graph .now .row.moving { background-color: var(--now); }
+    .graph .row.moving.rise { z-index: 3; }
+    @keyframes fade { from { opacity: 0; } }
+    .row.fade { animation: fade .3s ease-out; }
+    @media (prefers-reduced-motion: reduce) {
+      .spin, .halo, .beat, .pop, .row.fresh, .row.fade, .live::before, .m.live::before { animation: none !important; }
+    }
+    @media (max-width: 1200px) {
+      .harness, .sep { display: none; }
+    }
+    @media (max-width: 900px) {
+      .sha, .wt, .ppath, .pstats { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <nav class="projects" id="projects" aria-label="项目"></nav>
+    <div class="sum" id="sum"></div>
+    <div class="spacer"></div>
+    <div class="harness" id="harness"></div>
+    <span class="sep"></span>
+    <div class="seg" id="mode">
+      <button data-mode="agent" aria-pressed="true">Agent 色</button>
+      <button data-mode="branch" aria-pressed="false">分支色</button>
+    </div>
+    <button class="toggle" id="wts" aria-pressed="true">Worktree</button>
+    <button class="toggle" id="subs" aria-pressed="true">子 agent</button>
+    <button class="toggle" id="legend-btn" aria-pressed="true">图例</button>
+    <button class="toggle live" id="live" aria-pressed="true">实时</button>
+    <button class="toggle" id="reset">重置</button>
+  </header>
+
+  <div class="stage">
+    <main class="wrap" id="root"></main>
+  </div>
+
+  <aside class="legend" id="legend" aria-label="图例"></aside>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="menu" id="menu" role="menu" tabindex="-1" aria-label="git 操作" hidden></div>
+
+  <aside class="panel" id="panel" aria-label="Agent 对话" hidden>
+    <div class="ph" id="chat-head"></div>
+    <div class="msgs" id="chat-list"></div>
+    <div class="msgs review" id="review" role="tabpanel" aria-label="改动" hidden></div>
+    <div class="decide" id="decide" hidden></div>
+    <div class="msgs draft" id="draft" aria-label="新任务" hidden></div>
+    <form class="composer" id="composer">
+      <textarea id="prompt" rows="1" aria-label="给 agent 发消息"></textarea>
+      <div class="cbar">
+        <span class="hint" id="hint">Enter 发送 · Shift+Enter 换行</span>
+        <button class="send" id="send" type="submit" aria-label="发送" disabled><svg viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg></button>
+      </div>
+    </form>
+    <div class="ended" id="ended" hidden></div>
+  </aside>
+
+  <script>
+    const AGENT_H = 48, SUB_H = 28, ROW_H = 30, WT_H = 34, MORE_H = 40, GAP = 14, LANE_W = 22, PAD = 12, TICK = 1500, RECENT = 6;
+    const PAGE = '#101215', NOW = '#15181c', WAITING = '#f0b54a', DONE = '#86cf98';
+    const TRUNK = '#a3abb8', QUIET = '#4a5058', HUMAN_DOT = '#c3c7cd', RETIRED = '#5c626b';
+    const PALETTE = ['#a3abb8', '#d6a26e', '#8ea7ef', '#68c2b2', '#cf8abd', '#b3c46a', '#e39079', '#84c4d9', '#b39ddb'];
+    const HARNESS = {
+      claude: { name: 'Claude Code', color: '#e58a63' },
+      codex: { name: 'Codex', color: '#7eaaff' },
+      pi: { name: 'Pi', color: '#79d1a6' },
+      human: { name: '你', color: '#d4d7dc' },
+    };
+    const STATUS = { waiting: ['等你', 0], done: ['完成', 1], running: ['运行中', 2], idle: ['空闲', 3], here: ['', 4], draft: ['新任务', -1] };
+    const FOLDER = '<svg viewBox="0 0 16 16"><path d="M2 4.5C2 3.7 2.7 3 3.5 3h3L8 4.5h4.5c.8 0 1.5.7 1.5 1.5v5.5c0 .8-.7 1.5-1.5 1.5h-9c-.8 0-1.5-.7-1.5-1.5z"/></svg>';
+    const REPO = '<svg viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5.5" r="1.6"/><path d="M4 5.1v5.8M12 7.1c0 3-3 3.4-6.4 4.4"/></svg>';
+    const CLOSE = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+    const PLUS = '<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>';
+
+    // Simulated activity: what each agent cycles through while "live" is on.
+    const SCRIPT = {
+      'claude-1': ['Edit src/search/rank.ts', 'Read src/search/query.ts', 'Grep "tokenize("', 'Bash bun test search', 'Edit src/search/index.ts', 'Read src/search/stemmer.ts'],
+      'codex-1': ['Bash prisma migrate dev', 'Edit prisma/schema.prisma', 'Bash bun test billing', 'Read src/billing/invoice.ts'],
+      'codex-2': ['Read src/onboarding/Steps.tsx', 'Read src/onboarding/store.ts', 'Comment Steps.tsx:42', 'Read src/onboarding/Invite.tsx'],
+      'pi-1': ['Bash pnpm lint --fix', 'Edit src/ui/tokens.css', 'Edit src/components/Input.tsx', 'Read src/components/Card.tsx', 'Edit src/components/Modal.tsx'],
+      'codex-3': ['Bash go test ./internal/grpc/...', 'Edit internal/grpc/orders.go', 'Read api/orders/v1/orders.proto', 'Bash buf generate', 'Edit internal/gateway/mux.go'],
+      'claude-3': ['Edit internal/client/retry.go', 'Read internal/client/budget.go', 'Bash go test ./internal/client/...', 'Grep "retry.Do("'],
+      'pi-2': ['Bash xcodebuild test -scheme LumenWidgets', 'Edit Widgets/TodayProvider.swift', 'Read Lumen/Model/Entry.swift', 'Edit Widgets/TodayView.swift'],
+      // Finished agents only move again when you send them a follow-up.
+      'claude-2': ['Edit src/onboarding/Steps.tsx', 'Bash bun test onboarding', 'Read src/onboarding/store.ts'],
+      'claude-4': ['Edit Lumen/Sync/SyncEngine.swift', 'Bash xcodebuild test -scheme Lumen', 'Read Lumen/Sync/QuotaMonitor.swift'],
+    };
+    const SUB_SCRIPT = {
+      'Explore': ['Grep "searchIndex(" · 14 处', 'Glob src/**/search*.ts', 'Read src/api/search.ts'],
+      'test-writer': ['Bash bun test parser', 'Write test/search/parser.test.ts', 'Edit test/search/rank.test.ts'],
+      'docs-writer': ['Read README.md', 'Edit docs/search.md', 'Read src/search/index.ts'],
+      'perf-probe': ['Bash bun run bench:search', 'Read bench/results.json', 'Edit src/search/cache.ts'],
+    };
+    const MSGS = {
+      'main': ['chore: bump dependencies', 'docs: fix typos in CONTRIBUTING', 'chore: tidy editor config'],
+      'exp/llm-router': ['exp: cache routing decisions', 'exp: fallback to the small model'],
+      'feat/search-v2': ['feat(search): weight recent documents', 'fix(search): handle empty query', 'refactor(search): split ranker module', 'perf(search): memoize stemmer', 'feat(search): highlight matched terms'],
+      'refactor/ui-tokens': ['refactor(tokens): migrate cards', 'refactor(tokens): migrate modals', 'refactor(tokens): migrate tables', 'fix(tokens): focus ring contrast', 'chore(tokens): drop legacy variables'],
+      'fix/billing-rounding': ['fix(billing): migrate rounding column', 'test(billing): migration rollback', 'fix(billing): round credit notes'],
+      'feat/grpc-gateway': ['feat(grpc): stream order updates', 'fix(gateway): map NotFound to 404', 'refactor(gateway): share auth middleware'],
+      'fix/retry-storm': ['fix(client): cap concurrent retries', 'test(client): backoff jitter bounds'],
+      'feat/widgets': ['feat(widget): large layout', 'fix(widget): relevance score', 'refactor(widget): shared entry formatter'],
+      'feat/onboarding': ['fix(onboarding): address review comments', 'test(onboarding): invited user path'],
+      'fix/icloud-quota': ['fix(sync): resume uploads when quota frees up', 'test(sync): quota recovery'],
+      'test-writer': ['test(search): ranking fixtures', 'test(search): unicode queries', 'test(search): empty index'],
+      'perf-probe': ['perf(search): cache hot queries', 'perf(search): trim allocations'],
+    };
+    const TEMPLATES = [{ name: 'Explore' }, { name: 'docs-writer' }, { name: 'perf-probe', own: true }, { name: 'test-writer', own: true }];
+    // What a spawned subagent is told ([title, prompt]) and what it reports back.
+    const SUB_TASK = {
+      'Explore': ['查 searchIndex 的调用点', '找出所有直接调用 searchIndex( 的地方，按模块列出来。'],
+      'docs-writer': ['更新搜索文档', '按新的查询语法更新 docs/search.md，补上短语和排除词的例子。'],
+      'perf-probe': ['搜索性能基准', '跑一遍搜索基准，找出最热的路径，能优化就直接改。'],
+      'test-writer': ['补排序测试', '给排序信号补单元测试，覆盖时间衰减和空索引。'],
+    };
+    const SUB_DONE = {
+      'Explore': '共 14 处调用：api 层 6 处、jobs 4 处、admin 4 处。其中 3 处依赖旧的 score 字段，需要一起改。',
+      'docs-writer': 'docs/search.md 已更新，新增 4 个查询示例。',
+      'perf-probe': '热点在分词：每次查询都重建停用词表。加缓存后 p95 从 38ms 降到 21ms。',
+      'test-writer': '新增 9 个测试，全部通过。',
+    };
+    const SAYS = ['这一处改完了，跑一下相关测试。', '测试通过，继续下一个文件。', '调用方比预想的多，先确认一下函数签名。', '发现一个边界情况，顺手补上。', '旧实现已经没人用了，直接删掉。'];
+    const ACK = { running: '收到，这一步做完就按你说的调整。', waiting: '好，不运行这个命令了，按你说的来。', done: '好的，接着改。' };
+    // A task you start from the graph. The prototype can't read your prompt, so its agent works through the project's
+    // usual files (or, on a branch that already has changes, through those), tests with the project's command,
+    // and may ask for one permission on the way.
+    const START_SCRIPT = {
+      orbit: ['Glob src/**/*.tsx', 'Read src/routes.tsx', 'Grep "useCurrentUser("', 'Read src/settings/index.tsx', 'Edit src/settings/index.tsx', 'Bash bun test', 'Write src/settings/Preferences.tsx'],
+      atlas: ['Read internal/api/router.go', 'Grep "func (s *Server)"', 'Edit internal/api/handlers.go', 'Bash go test ./internal/api/...', 'Write internal/api/handlers_test.go'],
+      lumen: ['Read Lumen/App/LumenApp.swift', 'Grep "struct .*View"', 'Edit Lumen/Settings/SettingsView.swift', 'Bash xcodebuild test -scheme Lumen', 'Write LumenTests/SettingsTests.swift'],
+    };
+    const TEST_CMD = { orbit: 'bun test', atlas: 'go test ./...', lumen: 'xcodebuild test -scheme Lumen' };
+    const START_ASK = {
+      orbit: ['请求运行 bun add zod（会改 lockfile）', 'Bash bun add zod'],
+      atlas: ['请求运行 go get（会改 go.mod）', 'Bash go get golang.org/x/sync'],
+      lumen: ['请求运行 swift package update（会改 Package.resolved）', 'Bash swift package update'],
+    };
+
+    // Seeded transcripts, one line per entry: '>' your prompt (for a subagent, the task its parent gave it), '<' the agent's reply,
+    // '$' a tool call ('→' its result), '#' a commit id, '*' a subagent id, '?' a permission request ('|' the command), '!' a note.
+    const LOGS = {
+      'claude-1': [
+        '> 搜索 v2：把查询解析和排序重写一遍。现在的解析器不支持引号短语和排除词，排序只看词频。/api/search 的返回格式保持不变。',
+        '< 先看现有实现和调用方。',
+        '$ Read src/search/index.ts',
+        '$ Grep "tokenize(" → 9 处',
+        '< 解析器是一串正则，排序在 rank.ts 里只算词频。分三步做：\n1. 换成递归下降解析器，支持 "短语" 和 -排除词\n2. 排序加上 BM25 和时间衰减\n3. 分词结果加缓存',
+        '$ Write src/search/parser.ts',
+        '$ Bash bun test search → 31 通过',
+        '# c18',
+        '$ Edit src/search/rank.ts',
+        '# c21',
+        '$ Edit src/search/tokenizer.ts',
+        '# c24',
+        '* s3',
+        '< code-reviewer 提了 3 条建议，采纳前两条：空查询直接返回、停用词表移到配置。第三条换 Trie 收益不大，先不做。',
+        '> 解析器的边界情况多补点测试。另外查一下还有哪些地方直接调用 searchIndex。',
+        '< 好，开两个子 agent 并行：Explore 查调用点，test-writer 在单独的 worktree 里补测试。我继续调排序。',
+        '* s1',
+        '* s2',
+        '$ Edit src/search/rank.ts',
+      ],
+      'codex-1': [
+        '> 账单金额要按行四舍五入，不要在合计上取整。有客户反馈发票合计和明细差了 1 分钱。',
+        '$ Read src/billing/invoice.ts',
+        '$ Grep "Math.round" src/billing → 4 处',
+        '< 问题在 invoice.ts：先把各行加总再取整，和发票上逐行显示的金额对不上。改成逐行取整再求和，amount 列改存整数分。',
+        '# c16',
+        '$ Write test/billing/rounding.test.ts',
+        '# c20',
+        '$ Edit prisma/schema.prisma',
+        '< schema 改好了，需要生成并执行迁移。',
+        '? 请求运行 prisma migrate dev | Bash prisma migrate dev',
+      ],
+      'pi-1': [
+        '> 把组件迁移到 design tokens：颜色、间距、圆角都走变量，旧的 legacy 变量最后删掉。',
+        '$ Read src/ui/tokens.css',
+        '$ Grep "#[0-9a-f]{6}" src/components → 212 处',
+        '< 硬编码颜色有 212 处，分布在 38 个组件里。先抽出色阶，再按组件分批迁移，每批提交一次。',
+        '# c13',
+        '$ Edit src/components/Button.tsx',
+        '# c19',
+        '$ Edit src/components/Input.tsx',
+        '# c26',
+        '$ Bash pnpm lint --fix',
+      ],
+      'claude-2': [
+        '> 做新用户引导：欢迎页、步骤指示器，进度要能保存；被邀请进来的用户跳过引导。',
+        '$ Read src/onboarding/index.tsx',
+        '< 拆成四步：欢迎 → 资料 → 邀请同事 → 完成。进度先存 localStorage，登录后同步到服务端。',
+        '# c09',
+        '# c12',
+        '# c17',
+        '$ Bash bun test onboarding → 18 通过',
+        '# c23',
+        '< 完成了：改了 12 个文件，测试全部通过，PR #142 已创建。可以直接合并，也可以等 codex 的 review。',
+      ],
+      'codex-2': [
+        '> Review #142，重点看进度持久化和被邀请用户的逻辑。',
+        '$ Bash gh pr diff 142',
+        '$ Read src/onboarding/store.ts',
+        '< store.ts 写 localStorage 时没带版本号，以后改步骤结构会读到旧数据。记一条评论。',
+        '$ Comment store.ts:27',
+        '$ Read src/onboarding/Steps.tsx',
+      ],
+      'codex-3': [
+        '> 给订单服务加 gRPC 网关，现有 HTTP 接口保持兼容，错误码要映射对。',
+        '$ Read api/orders/v1/orders.proto',
+        '< 用 grpc-gateway 生成反向代理：先补 proto 注解，再写 handler，最后处理 gRPC 到 HTTP 的错误码映射。',
+        '# a09',
+        '$ Bash buf generate',
+        '# a11',
+        '$ Write internal/grpc/orders_test.go',
+        '# a13',
+        '$ Bash go test ./internal/grpc/...',
+      ],
+      'claude-3': [
+        '> 线上出现重试风暴：下游一慢，所有客户端一起重试，直接把它打挂。修一下。',
+        '< 先让 Explore 找出所有发起重试的地方。',
+        '* s4',
+        '< 6 处重试都是固定间隔，没有抖动也没有总预算。统一改成带抖动的指数退避，再加按 host 的重试预算。',
+        '# a12',
+        '$ Edit internal/client/budget.go',
+        '# a14',
+        '< 改完了。需要带 -race 跑一遍全量测试，确认没有数据竞争。',
+        '? 请求运行 go test -race ./... | Bash go test -race ./...',
+      ],
+      'pi-2': [
+        '> 做桌面小组件：今日摘要，显示今天的条目数和最近一条，点进去直接打开那一条。',
+        '$ Read Lumen/Model/Entry.swift',
+        '< 用 WidgetKit 的 TimelineProvider，每 30 分钟刷新。先做小号和中号，大号以后再说。',
+        '# l06',
+        '# l07',
+        '# l10',
+        '$ Edit Widgets/TodayView.swift',
+        '# l12',
+        '$ Bash xcodebuild test -scheme LumenWidgets',
+      ],
+      'claude-4': [
+        '> iCloud 空间满了之后同步会不停失败重试，很耗电。改成降级：暂停上传、提示用户，空间恢复后自动继续。',
+        '$ Grep "quotaExceeded" → 0 处',
+        '< 现在完全没处理 quotaExceeded，这个错误被当成网络问题一直重试。加一个配额状态：命中后暂停上传队列，在设置页提示。',
+        '# l09',
+        '$ Write LumenTests/SyncQuotaTests.swift',
+        '# l11',
+        '$ Bash xcodebuild test -scheme Lumen → 47 通过',
+        '< 完成：改了 5 个文件，测试通过，PR #23 已更新。',
+      ],
+      s1: [
+        '> 找出所有直接调用 searchIndex( 的地方，按模块列出来，标出依赖旧返回结构的调用。',
+        '$ Glob src/**/search*.ts',
+        '$ Grep "searchIndex(" · 14 处',
+      ],
+      s2: [
+        '> 给新解析器补边界测试：空串、只有排除词、未闭合的引号、Unicode。',
+        '$ Read src/search/parser.ts',
+        '$ Write test/search/parser.test.ts',
+        '# c25',
+        '$ Bash bun test parser',
+      ],
+      s3: [
+        '> Review feat/search-v2 目前的改动，重点看排序和缓存。',
+        '$ Bash git diff main...feat/search-v2',
+        '$ Read src/search/rank.ts',
+        '$ Read src/search/tokenizer.ts',
+        '< 3 条建议：\n1. 空查询应该直接返回，不用进排序\n2. 停用词表硬编码在 tokenizer.ts，建议移到配置\n3. 前缀匹配可以考虑换成 Trie',
+      ],
+      s4: [
+        '> 找出所有发起 HTTP 重试的地方，记下各自的重试策略。',
+        '$ Grep "retry.Do(" → 4 处',
+        '$ Grep "time.Sleep(" internal/ → 2 处',
+        '< 共 6 处：\n- client 下的 orders、payments、inventory、users 用 retry.Do，固定 200ms，最多 5 次\n- sync 下的 poller、webhook 手写循环加 time.Sleep\n都没有抖动，也没有总的重试预算。',
+      ],
+    };
+
+    // What each branch changes against main: [path, A(dded) / M(odified) / D(eleted), lines added, lines removed].
+    // Commits add to it as agents work (see fold()).
+    const FILES = {
+      'feat/onboarding': [
+        ['src/onboarding/index.tsx', 'M', 38, 12], ['src/onboarding/Steps.tsx', 'A', 96, 0], ['src/onboarding/Welcome.tsx', 'A', 54, 0],
+        ['src/onboarding/Profile.tsx', 'A', 71, 0], ['src/onboarding/Invite.tsx', 'A', 63, 0], ['src/onboarding/Done.tsx', 'A', 28, 0],
+        ['src/onboarding/store.ts', 'A', 47, 0], ['src/onboarding/guard.ts', 'A', 22, 0], ['src/api/onboarding.ts', 'A', 31, 0],
+        ['src/routes.tsx', 'M', 6, 1], ['test/onboarding/store.test.ts', 'A', 58, 0], ['test/onboarding/flow.test.ts', 'A', 84, 0],
+      ],
+      'feat/search-v2': [
+        ['src/search/parser.ts', 'A', 182, 0], ['src/search/query.ts', 'D', 0, 97], ['src/search/rank.ts', 'M', 88, 41],
+        ['src/search/tokenizer.ts', 'M', 34, 12], ['src/search/index.ts', 'M', 12, 9],
+      ],
+      'search-v2/tests': [['test/search/parser.test.ts', 'A', 64, 0]],
+      'fix/billing-rounding': [['src/billing/invoice.ts', 'M', 14, 9], ['test/billing/rounding.test.ts', 'A', 46, 0], ['prisma/schema.prisma', 'M', 2, 2]],
+      'refactor/ui-tokens': [
+        ['src/ui/tokens.css', 'M', 64, 3], ['src/components/Button.tsx', 'M', 18, 18], ['src/components/Input.tsx', 'M', 15, 15],
+        ['src/components/Card.tsx', 'M', 9, 9], ['src/components/Modal.tsx', 'M', 12, 12],
+      ],
+      'exp/llm-router': [['src/router/route.ts', 'A', 44, 0], ['scripts/latency-probe.ts', 'A', 29, 0]],
+      'fix/avatar-upload': [['src/settings/Avatar.tsx', 'M', 23, 6], ['src/settings/resize.ts', 'A', 31, 0]],
+      'feat/grpc-gateway': [
+        ['api/orders/v1/orders.proto', 'M', 18, 2], ['internal/grpc/orders.go', 'A', 96, 0], ['internal/gateway/mux.go', 'A', 54, 0],
+        ['internal/grpc/orders_test.go', 'A', 71, 0],
+      ],
+      'fix/retry-storm': [
+        ['internal/client/retry.go', 'M', 41, 17], ['internal/client/budget.go', 'A', 58, 0], ['internal/client/retry_test.go', 'M', 47, 6],
+        ['internal/sync/poller.go', 'M', 9, 11], ['internal/sync/webhook.go', 'M', 7, 10],
+      ],
+      'spike/sqlc': [['sqlc.yaml', 'A', 12, 0], ['internal/store/queries/orders.sql', 'A', 38, 0], ['internal/store/orders.go', 'M', 61, 88]],
+      'feat/widgets': [
+        ['Widgets/TodayProvider.swift', 'A', 58, 0], ['Widgets/TodayView.swift', 'A', 77, 0], ['Widgets/LumenWidgets.swift', 'A', 19, 0],
+        ['Lumen/Model/Entry.swift', 'M', 8, 1], ['Lumen/App/DeepLink.swift', 'A', 26, 0],
+      ],
+      'fix/icloud-quota': [
+        ['Lumen/Sync/SyncEngine.swift', 'M', 42, 9], ['Lumen/Sync/QuotaMonitor.swift', 'A', 61, 0], ['Lumen/Sync/UploadQueue.swift', 'M', 18, 4],
+        ['Lumen/Settings/SyncSettingsView.swift', 'M', 24, 2], ['LumenTests/SyncQuotaTests.swift', 'A', 77, 0],
+      ],
+    };
+    // A hunk from some of those files: where it starts in the old and new file, then the lines (' ' context, '-' removed, '+' added).
+    const DIFFS = {
+      'src/onboarding/index.tsx': [[8, 8],
+        " import { Steps } from './Steps';", "-import { Wizard } from '../ui/Wizard';", "+import { shouldOnboard } from './guard';",
+        "+import { loadProgress, saveProgress } from './store';", ' ', ' export function Onboarding() {', '-  const [step, setStep] = useState(0);',
+        '+  const user = useCurrentUser();', "+  const [progress, setProgress] = useState(() => loadProgress() ?? { step: 'welcome', invited: [] });",
+        '+  const useOnb = shouldOnboard(user);', '+  if (!useOnb) return <Navigate to="/" replace />;'],
+      'src/onboarding/Steps.tsx': [[0, 35],
+        '+export function Steps({ steps, current, onChange }: StepsProps) {', '+  const index = steps.findIndex(s => s.id === current);',
+        '+  const goNext = () => onChange(steps[index + 1]?.id ?? current);', '+  const goBack = () => onChange(steps[index - 1]?.id ?? current);',
+        '+', '+  useHotkeys({ ArrowRight: goNext, ArrowLeft: goBack });', '+', '+  const advance = goNext; // Profile 表单提交后调用', '+  return (',
+        '+    <ol className="steps" aria-label="引导步骤">'],
+      'src/onboarding/store.ts': [[0, 17],
+        "+const KEY = 'orbit.onboarding';", '+', '+export type Progress = { step: StepId; profile?: ProfileDraft; invited: string[] };', '+',
+        '+export function loadProgress(): Progress | null {', '+  const raw = localStorage.getItem(KEY);', '+  return raw ? (JSON.parse(raw) as Progress) : null;',
+        '+}', '+', '+export function saveProgress(p: Progress) {', '+  localStorage.setItem(KEY, JSON.stringify(p));', '+  void syncProgress(p); // 登录后以服务端为准', '+}'],
+      'src/onboarding/guard.ts': [[0, 1],
+        "+import { loadProgress } from './store';", '+', '+// 被邀请进来的用户已经在团队里了：跳过引导，直接进工作区。', '+export function shouldOnboard(user: User): boolean {',
+        '+  if (user.onboardedAt) return false;', '+  const progress = loadProgress();', "+  if (progress?.step === 'done') return false;", '+',
+        '+  return !user.invitedBy;', '+}'],
+      'src/onboarding/Invite.tsx': [[0, 12],
+        '+export function Invite({ onNext }: StepProps) {', '+  const [emails, setEmails] = useState<string[]>([]);', '+  const invite = useMutation(api.invite);',
+        '+', '+  async function submit() {', '+    if (emails.length) await invite.mutateAsync({ emails });', '+    onNext();', '+  }'],
+      'src/api/onboarding.ts': [[0, 1],
+        "+import { http } from './http';", "+import type { Progress } from '../onboarding/store';", '+', '+// 登录后把本地进度同步到服务端；两边都有时以服务端为准。',
+        '+export async function syncProgress(p: Progress) {', '+  if (!session.current) return;', "+  await http.put('/me/onboarding', p);", '+}'],
+      'src/routes.tsx': [[21, 21],
+        "   { path: '/', element: <Home /> },", "-  { path: '/welcome', element: <Welcome /> },",
+        "+  { path: '/onboarding', element: <Onboarding />, loader: requireUser },", "+  { path: '/welcome', element: <Navigate to=\"/onboarding\" replace /> },",
+        "   { path: '/settings', element: <Settings /> },"],
+      'test/onboarding/flow.test.ts': [[0, 9],
+        "+describe('onboarding', () => {", "+  it('walks the four steps and saves progress', async () => {", '+    render(<Onboarding />);',
+        "+    await user.click(screen.getByRole('button', { name: '开始' }));", "+    expect(loadProgress()?.step).toBe('profile');", '+  });', '+',
+        "+  it('resumes where you left off', async () => {"],
+      'src/search/parser.ts': [[0, 24],
+        '+// query  := term*', '+// term   := "-"? (phrase | word)', '+// phrase := \'"\' [^"]* \'"\'', '+export function parse(input: string): Query {',
+        '+  const terms: Term[] = [];', '+  const lex = new Lexer(input);', '+  while (!lex.done()) terms.push(parseTerm(lex));', '+  return { terms };', '+}'],
+      'src/search/rank.ts': [[12, 12],
+        ' export function score(doc: Doc, q: Query): number {', '-  return q.terms.reduce((s, t) => s + tf(doc, t), 0);',
+        '+  const base = q.terms.reduce((s, t) => s + bm25(doc, t, stats), 0);', '+  return base * decay(doc.updatedAt); // 越新的文档权重越高', ' }'],
+      'src/billing/invoice.ts': [[40, 40],
+        ' export function total(lines: Line[]): number {', '-  return Math.round(lines.reduce((s, l) => s + l.qty * l.price, 0) * 100) / 100;',
+        '+  // 逐行取整再求和，和发票上逐行显示的金额对得上', '+  return lines.reduce((s, l) => s + Math.round(l.qty * l.priceCents), 0);', ' }'],
+      'src/ui/tokens.css': [[1, 1],
+        ' :root {', '+  --gray-1: #101215; --gray-2: #15181c; --gray-3: #1d2126;', '+  --radius-s: 6px; --radius-m: 10px;',
+        '+  --space-1: 4px; --space-2: 8px; --space-3: 12px;', '   --legacy-bg: #101215;'],
+      'internal/client/retry.go': [[31, 31],
+        ' func (c *Client) do(req *http.Request) (*http.Response, error) {', '-\treturn retry.Do(5, 200*time.Millisecond, func() error {',
+        '+\tif !c.budget.Allow(req.URL.Host) {', '+\t\treturn nil, ErrRetryBudget', '+\t}',
+        '+\treturn retry.Do(5, backoff.Jittered(100*time.Millisecond, 5*time.Second), func() error {'],
+      'internal/client/budget.go': [[0, 9],
+        '+// Budget 按 host 限制重试：重试最多占请求的 10%，', '+// 下游一慢，收到的请求变少，而不是一起重试把它打挂。', '+type Budget struct {',
+        '+\tmu    sync.Mutex', '+\tratio float64', '+\thosts map[string]*window', '+}'],
+      'internal/gateway/mux.go': [[0, 14],
+        '+// gRPC 错误码映射到 HTTP：NotFound → 404，InvalidArgument → 400，其余 500。',
+        '+func errorHandler(ctx context.Context, mux *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, err error) {',
+        '+\tst := status.Convert(err)', '+\tw.WriteHeader(httpStatus(st.Code()))', '+\t_ = m.NewEncoder(w).Encode(errorBody{Code: st.Code().String(), Message: st.Message()})', '+}'],
+      'Widgets/TodayProvider.swift': [[0, 8],
+        '+struct TodayProvider: TimelineProvider {', '+    func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {',
+        '+        let entry = TodayEntry(date: .now, count: store.todayCount(), latest: store.latest())',
+        '+        let next = Calendar.current.date(byAdding: .minute, value: 30, to: .now)!', '+        completion(Timeline(entries: [entry], policy: .after(next)))', '+    }'],
+      'Lumen/Sync/SyncEngine.swift': [[88, 88],
+        '         } catch let error as CKError {', '-            scheduleRetry(after: .seconds(30))', '+            if error.code == .quotaExceeded {',
+        '+                uploads.pause(reason: .quotaExceeded)', '+                quota.startWatching()', '+                return', '+            }',
+        '+            scheduleRetry(after: backoff.next())', '         }'],
+      'Lumen/Sync/QuotaMonitor.swift': [[0, 6],
+        '+/// 空间满了之后每 15 分钟查一次账户状态，空间够了就恢复上传队列。', '+final class QuotaMonitor {', '+    private var timer: Timer?', '+',
+        '+    func startWatching() {', '+        timer?.invalidate()',
+        '+        timer = .scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in', '+            Task { await self?.check() }'],
+      'LumenTests/SyncQuotaTests.swift': [[0, 10],
+        '+    func testQuotaExceededPausesUploads() async throws {', '+        let engine = SyncEngine(container: .failing(.quotaExceeded))',
+        '+        try await engine.push(Entry.sample)', '+        XCTAssertEqual(engine.uploads.state, .paused(.quotaExceeded))',
+        '+        XCTAssertEqual(engine.retryCount, 0)', '+    }'],
+    };
+    // A reviewer's comments, [file, line, text]. Each shows once the reviewer's transcript has its "Comment file:line" call,
+    // and all of them once the review is done ("留下 4 条评论").
+    const REVIEW = {
+      'codex-2': [
+        ['src/onboarding/store.ts', 27, '写 localStorage 时没带版本号，以后改步骤结构会读到旧数据。存成 { v: 1, … }，版本不对就丢掉。'],
+        ['src/onboarding/guard.ts', 9, '被邀请用户跳过引导这条路径没有测试，flow.test.ts 里补一个。'],
+        ['src/onboarding/Steps.tsx', 42, 'advance 和 goNext 是同一个函数，留一个名字就行。'],
+        ['src/onboarding/index.tsx', 15, 'useOnb 看起来像个 hook，其实是个布尔值，改叫 needsOnboarding。'],
+      ],
+    };
+
+    // Each project is one repository: its commits, the worktrees checked out from it, and the agents working in them.
+    function seed() {
+      const now = Date.now();
+      const project = (id, path, list, rest) => {
+        const last = {};
+        const commits = list.map(([cid, branch, msg, author, minutes, parents, sub]) => {
+          const c = { id: cid, branch, msg, author, sub, ts: now - minutes * 60000, parents: parents || (last[branch] ? [last[branch]] : []) };
+          last[branch] = cid;
+          return c;
+        });
+        // remote: where origin's copy of each branch points; branches missing from it were never pushed.
+        // changes: per branch, what it changes against main (path → { path, st, add, del }).
+        const branches = new Set([...commits.map(c => c.branch), ...rest.worktrees.map(w => w.branch)]);
+        const changes = Object.fromEntries([...branches].filter(b => FILES[b])
+          .map(b => [b, new Map(FILES[b].map(([path, st, add, del]) => [path, { path, st, add, del }]))]));
+        // msgs: commit messages for branches started from the graph, which MSGS knows nothing about.
+        return { id, name: id, path, commits, msgN: {}, msgs: {}, tags: {}, prs: {}, remote: {}, merged: new Set(), colors: new Map(), changes, ...rest };
+      };
+      const st = {
+        seq: 100, // new commit and subagent ids are 'n' / 's' + seq; start clear of the seeded s1…s4
+        projects: [
+          project('orbit', '~/projects/web/orbit', [
+            ['c01', 'main', 'chore: scaffold orbit', 'human', 12960],
+            ['c02', 'main', 'feat(auth): email login', 'human', 11520],
+            ['c03', 'main', 'ci: lint and test workflow', 'human', 10080],
+            ['c04', 'fix/login-timeout', 'fix(auth): extend session timeout', 'claude', 8700, ['c03']],
+            ['c05', 'main', 'feat(settings): profile page', 'human', 8600],
+            ['c06', 'fix/login-timeout', 'test(auth): cover refresh path', 'claude', 7300],
+            ['c07', 'main', 'Merge #128 fix/login-timeout', 'human', 7180, ['c05', 'c06']],
+            ['c08', 'main', 'chore: release 1.3.0', 'human', 5760],
+            ['c09', 'feat/onboarding', 'feat(onboarding): welcome flow', 'claude', 4300, ['c08']],
+            ['c10', 'exp/llm-router', 'exp: route by prompt length', 'human', 4200, ['c08']],
+            ['c11', 'main', 'fix(billing): typo in invoice email', 'human', 2900],
+            ['c12', 'feat/onboarding', 'feat(onboarding): step indicator', 'claude', 2700],
+            ['c13', 'refactor/ui-tokens', 'refactor(tokens): extract color scale', 'pi', 1500, ['c11']],
+            ['c14', 'exp/llm-router', 'exp: latency probe', 'human', 1400],
+            ['c15', 'main', 'feat(api): rate limit headers', 'human', 1200],
+            // Your own branch, left half done when you switched back to main: no worktree has it checked out.
+            ['c27', 'fix/avatar-upload', 'fix(settings): resize avatars before upload', 'human', 1000, ['c15']],
+            ['c28', 'fix/avatar-upload', 'wip: crop avatars to square', 'human', 820],
+            ['c16', 'fix/billing-rounding', 'fix(billing): round per line item', 'codex', 540, ['c15']],
+            ['c17', 'feat/onboarding', 'feat(onboarding): persist progress', 'claude', 480],
+            ['c18', 'feat/search-v2', 'feat(search): new query parser', 'claude', 360, ['c15']],
+            ['c19', 'refactor/ui-tokens', 'refactor(tokens): migrate buttons', 'pi', 300],
+            ['c20', 'fix/billing-rounding', 'test(billing): rounding fixtures', 'codex', 180],
+            ['c21', 'feat/search-v2', 'feat(search): ranking signals', 'claude', 120],
+            ['c22', 'main', 'docs: update README', 'human', 90],
+            ['c23', 'feat/onboarding', 'fix(onboarding): skip for invited users', 'claude', 70],
+            ['c24', 'feat/search-v2', 'perf(search): cache tokenizer', 'claude', 40],
+            ['c25', 'search-v2/tests', 'test(search): parser edge cases', 'claude', 12, ['c24'], 'test-writer'],
+            ['c26', 'refactor/ui-tokens', 'refactor(tokens): migrate inputs', 'pi', 6],
+          ], {
+            tags: { c08: ['v1.3.0'] },
+            prs: { 'feat/onboarding': 142 },
+            remote: { main: 'c15', 'feat/onboarding': 'c23', 'feat/search-v2': 'c21', 'refactor/ui-tokens': 'c19' },
+            merged: new Set(['fix/login-timeout']),
+            worktrees: [
+              { id: 'wt-main', path: 'orbit', primary: true, branch: 'main', add: 3, del: 1, agents: [{ id: 'me', harness: 'human', status: 'here' }] },
+              { id: 'wt-search', path: 'orbit-search', branch: 'feat/search-v2', add: 126, del: 31, agents: [
+                { id: 'claude-1', harness: 'claude', status: 'running', spawns: true, task: '搜索 v2：重写解析和排序', activity: 'Edit src/search/rank.ts', elapsed: 1560, subagents: [
+                  { id: 's1', name: 'Explore', task: '查 searchIndex 的调用点', status: 'running', activity: 'Grep "searchIndex(" · 14 处' },
+                  { id: 's2', name: 'test-writer', task: '补解析器边界测试', status: 'running', activity: 'Bash bun test parser', branch: 'search-v2/tests', path: '.claude/worktrees/tests', base: 'c24' },
+                  { id: 's3', name: 'code-reviewer', task: 'Review feat/search-v2', status: 'done', activity: '返回 3 条建议' },
+                ] },
+              ] },
+              { id: 'wt-billing', path: 'orbit-billing', branch: 'fix/billing-rounding', add: 18, del: 4, agents: [
+                { id: 'codex-1', harness: 'codex', status: 'waiting', task: '账单金额按行四舍五入', activity: '请求运行 prisma migrate dev', pending: 'Bash prisma migrate dev', elapsed: 540, subagents: [] },
+              ] },
+              { id: 'wt-tokens', path: 'orbit-tokens', branch: 'refactor/ui-tokens', add: 240, del: 198, agents: [
+                { id: 'pi-1', harness: 'pi', status: 'running', task: '组件迁移到 design tokens', activity: 'Bash pnpm lint --fix', elapsed: 3120, ask: ['请求运行 pnpm install（会改 lockfile）', 'Bash pnpm install'], subagents: [] },
+              ] },
+              { id: 'wt-onboard', path: 'orbit-onboard', branch: 'feat/onboarding', add: 0, del: 0, agents: [
+                { id: 'claude-2', harness: 'claude', status: 'done', task: '新用户引导流程', activity: '12 个文件 · 测试通过', elapsed: 2280, subagents: [] },
+                { id: 'codex-2', harness: 'codex', status: 'running', role: 'review', task: 'Review #142', activity: 'Read src/onboarding/Steps.tsx', elapsed: 240, subagents: [] },
+              ] },
+              { id: 'wt-router', path: 'orbit-router', branch: 'exp/llm-router', add: 7, del: 2, agents: [] },
+            ],
+          }),
+          project('atlas', '~/projects/go/atlas', [
+            ['a01', 'main', 'chore: init atlas service', 'human', 20160],
+            ['a02', 'main', 'feat(api): health and version endpoints', 'human', 18720],
+            ['a03', 'main', 'feat(store): postgres repository layer', 'human', 15840],
+            ['a04', 'feat/cursor-pagination', 'feat(api): cursor pagination for /orders', 'codex', 9800, ['a03']],
+            ['a05', 'main', 'ci: run tests with -race', 'human', 9000],
+            ['a06', 'feat/cursor-pagination', 'test(api): pagination boundaries', 'codex', 8640],
+            ['a07', 'main', 'Merge #57 feat/cursor-pagination', 'human', 7300, ['a05', 'a06']],
+            ['a08', 'main', 'chore: release v0.9.0', 'human', 5600],
+            ['a09', 'feat/grpc-gateway', 'feat(grpc): order service protos', 'codex', 900, ['a08']],
+            ['a10', 'main', 'fix(store): close rows on early return', 'human', 700],
+            // A Codex experiment whose worktree was removed; the branch is still around, unmerged.
+            ['a16', 'spike/sqlc', 'spike(store): generate order queries with sqlc', 'codex', 640, ['a10']],
+            ['a17', 'spike/sqlc', 'spike(store): port orders repository', 'codex', 560],
+            ['a11', 'feat/grpc-gateway', 'feat(grpc): gateway handlers', 'codex', 420],
+            ['a12', 'fix/retry-storm', 'fix(client): jittered exponential backoff', 'claude', 260, ['a10']],
+            ['a13', 'feat/grpc-gateway', 'test(grpc): order round trip', 'codex', 150],
+            ['a14', 'fix/retry-storm', 'test(client): retry budget per host', 'claude', 60],
+            ['a15', 'main', 'docs: API versioning policy', 'human', 45],
+          ], {
+            tags: { a08: ['v0.9.0'] },
+            prs: { 'fix/retry-storm': 61 },
+            remote: { main: 'a15', 'fix/retry-storm': 'a14', 'feat/grpc-gateway': 'a11', 'spike/sqlc': 'a17' },
+            merged: new Set(['feat/cursor-pagination']),
+            worktrees: [
+              { id: 'wt-main', path: 'atlas', primary: true, branch: 'main', add: 0, del: 0, agents: [] },
+              { id: 'wt-grpc', path: 'atlas-grpc', branch: 'feat/grpc-gateway', add: 64, del: 12, agents: [
+                { id: 'codex-3', harness: 'codex', status: 'running', task: '订单服务的 gRPC 网关', activity: 'Bash go test ./internal/grpc/...', elapsed: 2700, subagents: [] },
+              ] },
+              { id: 'wt-retry', path: 'atlas-retry', branch: 'fix/retry-storm', add: 22, del: 9, agents: [
+                { id: 'claude-3', harness: 'claude', status: 'waiting', task: '修复客户端重试风暴', activity: '请求运行 go test -race ./...', pending: 'Bash go test -race ./...', elapsed: 840, subagents: [
+                  { id: 's4', name: 'Explore', task: '查所有重试调用', status: 'done', activity: '找到 6 处重试调用' },
+                ] },
+              ] },
+            ],
+          }),
+          project('lumen', '~/projects/apple/lumen', [
+            ['l01', 'main', 'chore: Xcode project scaffold', 'human', 30240],
+            ['l02', 'main', 'feat: SwiftData journal model', 'human', 25920],
+            ['l03', 'main', 'feat(ui): timeline view', 'human', 21600],
+            ['l04', 'main', 'fix(ui): dark mode contrast', 'human', 12000],
+            ['l05', 'main', 'chore: TestFlight build 0.4', 'human', 8000],
+            ['l06', 'feat/widgets', 'feat(widget): timeline provider', 'pi', 2600, ['l05']],
+            ['l07', 'feat/widgets', 'feat(widget): small and medium layouts', 'pi', 1300],
+            ['l08', 'main', 'fix(sync): conflict on rename', 'human', 800],
+            ['l09', 'fix/icloud-quota', 'fix(sync): back off when iCloud quota is full', 'claude', 500, ['l08']],
+            ['l10', 'feat/widgets', 'feat(widget): deep link into entry', 'pi', 240],
+            ['l11', 'fix/icloud-quota', 'test(sync): quota exceeded path', 'claude', 200],
+            ['l12', 'feat/widgets', 'fix(widget): placeholder snapshot', 'pi', 30],
+          ], {
+            tags: { l05: ['v0.4.0'] },
+            prs: { 'fix/icloud-quota': 23 },
+            remote: { main: 'l08', 'fix/icloud-quota': 'l11', 'feat/widgets': 'l10' },
+            worktrees: [
+              { id: 'wt-main', path: 'lumen', primary: true, branch: 'main', add: 0, del: 0, agents: [] },
+              { id: 'wt-widgets', path: 'lumen-widgets', branch: 'feat/widgets', add: 41, del: 6, agents: [
+                { id: 'pi-2', harness: 'pi', status: 'running', task: '桌面小组件：今日摘要', activity: 'Bash xcodebuild test -scheme LumenWidgets', elapsed: 1900, ask: ['请求运行 xcrun simctl erase all（会清空模拟器）', 'Bash xcrun simctl erase all'], subagents: [] },
+              ] },
+              { id: 'wt-quota', path: 'lumen-quota', branch: 'fix/icloud-quota', add: 0, del: 0, agents: [
+                { id: 'claude-4', harness: 'claude', status: 'done', task: 'iCloud 空间满时的同步降级', activity: '5 个文件 · 测试通过', elapsed: 1500, subagents: [] },
+              ] },
+            ],
+          }),
+        ],
+      };
+      for (const p of st.projects) for (const wt of p.worktrees) for (const a of wt.agents) {
+        a.log = parseLog(LOGS[a.id] || [], p, a);
+        for (const s of a.subagents || []) s.log = parseLog(LOGS[s.id] || [], p, a);
+      }
+      return st;
+    }
+
+    // Transcript entries: user / text / tool / commit / spawn / ask / note. LOGS spells the seeded ones out line by line.
+    function parseLog(lines, p, a) {
+      return lines.map(line => {
+        const k = line[0], v = line.slice(2);
+        if (k === '>') return { t: 'user', text: v };
+        if (k === '<') return { t: 'text', text: v };
+        if (k === '$') return tool(v);
+        if (k === '#') return { t: 'commit', c: p.commits.find(c => c.id === v) };
+        if (k === '*') return { t: 'spawn', s: a.subagents.find(s => s.id === v) };
+        if (k === '?') {
+          const [text, cmd] = v.split(' | ');
+          return { t: 'ask', text, cmd, res: a.status === 'waiting' && a.pending === cmd ? null : 'allow' };
+        }
+        return { t: 'note', text: v };
+      });
+    }
+    // 'Bash bun test search → 31 通过' → tool Bash, argument 'bun test search', result '31 通过'.
+    function tool(str) {
+      const [call, out] = str.split(' → '), i = call.indexOf(' ');
+      return { t: 'tool', name: call.slice(0, i), arg: call.slice(i + 1), out };
+    }
+
+    // pinned: the branch picked with a click ({ p, b }). menu: the open right-click menu ({ p, b, key, confirm }, or { p, c } on a commit).
+    // chat: the agent whose conversation is open on the right ({ p, a, s, wt }). spot: a commit briefly highlighted in the graph.
+    // draft: the task you are writing in the panel instead (see openDraft()); pickH: the harness picked for the last one.
+    const ui = { project: 'all', mode: 'agent', wts: true, subs: true, live: true, legend: true, harness: new Set(['claude', 'codex', 'pi']), pinned: null, menu: null, chat: null, spot: null, draft: null, pickH: 'claude' };
+    let state = seed(), timer = null;
+
+    const $ = id => document.getElementById(id);
+    const root = $('root');
+    const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    const pick = (list, cur) => { const opts = list.filter(x => x !== cur); return opts.length ? opts[Math.floor(Math.random() * opts.length)] : cur; };
+    const sha = id => {
+      let h = 2166136261;
+      for (const ch of id) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+      h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15;
+      return (h >>> 0).toString(16).padStart(8, '0').slice(0, 7);
+    };
+    const age = ts => { const m = (Date.now() - ts) / 60000; return m < 1 ? '刚刚' : m < 60 ? `${Math.floor(m)}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`; };
+    const dur = s => s < 3600 ? `${Math.max(1, Math.floor(s / 60))}m` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
+    const off = h => h && h !== 'human' && !ui.harness.has(h) ? ' off' : '';
+    // A worktree row dims only when every agent in it is filtered out.
+    const offWt = wt => wt.agents.length && wt.agents.every(a => off(a.harness)) ? ' off' : '';
+    const dim = r => r.kind === 'wt' ? offWt(r.wt) : off(r.hz);
+    const same = (a, b) => !!a && !!b && a.p === b.p && a.b === b.b;
+    const written = new WeakMap();
+    const setHTML = (el, html) => { if (written.get(el) !== html) { written.set(el, html); el.innerHTML = html; } };
+    // Update a list in place: unchanged items keep their nodes (and any text selection in them); new ones are appended.
+    function patch(el, items) {
+      items.forEach((html, i) => {
+        const old = el.children[i];
+        if (old && written.get(old) === html) return;
+        const t = document.createElement('template');
+        t.innerHTML = html;
+        const node = t.content.firstElementChild;
+        written.set(node, html);
+        if (old) old.replaceWith(node); else el.append(node);
+      });
+      while (el.children.length > items.length) el.lastElementChild.remove();
+    }
+    // Motion: when rows move (re-sorting, rows coming or going, a new commit pushing history down) they slide from where
+    // they were drawn to their new place, and the lanes bend along with them. shown: per project, what is on screen.
+    const MOVE_MS = 420, ease = t => 1 - Math.pow(1 - t, 3);
+    const shown = new Map(), popAt = new WeakMap();
+    let raf = 0;
+    const laneX = l => PAD + l * LANE_W + LANE_W / 2;
+    // Offsets land on whole device pixels: adjacent sliding rows then meet without antialiased seams.
+    const snap = v => { const r = devicePixelRatio || 1; return Math.round(v * r) / r; };
+    const say = (x, e) => { (x.log ||= []).push(e); if (x.log.length > 300) x.log.splice(0, x.log.length - 300); };
+    const drafts = new WeakMap(); // unsent prompt per agent
+
+    const projectOf = id => state.projects.find(p => p.id === id);
+    const scope = () => ui.project === 'all' ? state.projects : state.projects.filter(p => p.id === ui.project);
+    const agentCount = (ps, s) => ps.reduce((n, p) => n + p.worktrees.reduce((m, w) => m + w.agents.filter(a => a.status === s).length, 0), 0);
+    const branchColor = (p, b) => {
+      if (!p.colors.has(b)) p.colors.set(b, b === 'main' ? PALETTE[0] : PALETTE[1 + p.colors.size % (PALETTE.length - 1)]);
+      return p.colors.get(b);
+    };
+    // Linked worktrees sit next to the primary one: ~/projects/web/orbit → ~/projects/web/orbit-search.
+    const fullPath = (p, wt) => wt.primary ? p.path : p.path.replace(/[^/]+$/, wt.path);
+
+    const tipOf = (p, b) => { for (let i = p.commits.length - 1; i >= 0; i--) if (p.commits[i].branch === b) return p.commits[i].id; return null; };
+    const allSubs = p => p.worktrees.flatMap(wt => wt.agents.flatMap(a => a.subagents || []));
+    // A branch with no commits yet sits on its base; that includes the one a task you are writing would fork off.
+    const baseOf = (p, b) => p.worktrees.find(w => w.branch === b)?.base || allSubs(p).find(s => s.branch === b)?.base
+      || (ui.draft?.p === p.id && ui.draft.kind === 'new' && ui.draft.ok === b ? ui.draft.base : null);
+    // The color branchColor() will give the next new branch, for one that doesn't exist yet.
+    const nextColor = p => PALETTE[1 + p.colors.size % (PALETTE.length - 1)];
+    const headOf = (p, b) => tipOf(p, b) || baseOf(p, b);
+    const checkoutOf = (p, b) => p.worktrees.find(w => w.branch === b)?.path || allSubs(p).find(s => s.branch === b)?.path || null;
+    function parentOf(p, b, map) {
+      const first = p.commits.find(c => c.branch === b);
+      const par = map.get(first ? first.parents[0] : baseOf(p, b));
+      return par ? par.branch : 'main';
+    }
+    // How many commits main has gained since the branch forked off it (0 for main, and for branches forked elsewhere).
+    function behindCount(p, b, map) {
+      if (b === 'main') return 0;
+      const first = p.commits.find(c => c.branch === b), base = first && map.get(first.parents[0]);
+      if (!base || base.branch !== 'main') return 0;
+      return p.commits.filter(c => c.branch === 'main' && c.ts > base.ts).length;
+    }
+    function behind(p, b, map) {
+      const n = behindCount(p, b, map);
+      return n ? `<span class="behind" title="落后 main ${n} 个提交">↓${n}</span>` : '';
+    }
+
+    // Every row has a stable key: 'wt:<id>' worktree, 'a:<id>' agent (or you), 's:<agent>:<sub>' subagent,
+    // 'tip:<branch>' the newest commit of an unmerged branch (so it follows the tip as it moves), 'c:<id>' any other commit.
+    function keyOf(p, r) {
+      if (r.kind === 'wt') return `wt:${r.wt.id}`;
+      if (r.kind === 'agent') return `a:${r.agent.id}`;
+      if (r.kind === 'sub') return `s:${r.agent.id}:${r.sub.id}`;
+      const b = r.branch, sub = allSubs(p).some(s => s.branch === b);
+      return tipOf(p, b) === r.commit.id && !p.merged.has(b) && !sub ? `tip:${b}` : `c:${r.commit.id}`;
+    }
+    // The branch a right-click on that row acts on: the worktree's branch for a worktree or agent row (you included),
+    // the branch itself for a branch tip. Other commits get a menu of their own (start a task there); subagent rows,
+    // and the outline of a task you are writing, keep the browser's.
+    function menuBranch(p, key) {
+      const [kind, id] = key.split(':');
+      if (kind === 'wt') return p.worktrees.find(w => w.id === id)?.branch;
+      if (kind === 'a') return p.worktrees.find(w => w.agents.some(a => a.id === id))?.branch;
+      if (kind === 'tip') return key.slice(4);
+      return null;
+    }
+    // What each action would do to branch b right now: '' when it can run, otherwise the reason it cannot.
+    function gitState(p, b) {
+      const map = new Map(p.commits.map(c => [c.id, c]));
+      const wt = p.worktrees.find(w => w.branch === b) || null;
+      const own = p.commits.filter(c => c.branch === b), ids = new Set(own.map(c => c.id));
+      const merged = p.merged.has(b), dirty = !!wt && wt.add + wt.del > 0;
+      const working = (wt ? wt.agents : []).filter(a => a.harness !== 'human' && (a.status === 'running' || a.status === 'waiting'));
+      const writer = working.find(a => !a.role); // reviewers only read, so they don't hold up a merge or rebase
+      const busy = a => a && `${HARNESS[a.harness].name} 还在工作`;
+      const based = p.commits.some(c => c.branch !== b && c.parents.some(x => ids.has(x)));
+      const remote = p.remote[b], at = remote ? p.commits.findIndex(c => c.id === remote) : -1;
+      const diverged = !!remote && at < 0; // origin still points at commits a rebase rewrote
+      const ahead = remote && !diverged ? own.filter(c => p.commits.indexOf(c) > at).length : own.length;
+      const behindN = behindCount(p, b, map);
+      const first = (...checks) => checks.find(Boolean) || '';
+      return {
+        wt, own: own.length, tip: tipOf(p, b), ahead, behind: behindN, diverged, upstream: !!remote,
+        commit: first(!wt && '没有检出到 worktree', merged && '已经合并', !dirty && '没有改动'),
+        push: first(merged && '已经合并', !ahead && !diverged && '和 origin 一致'),
+        // A busy agent comes before uncommitted changes: while it works the worktree never stays clean, so committing alone won't help.
+        merge: first(b === 'main' && '这就是 main', merged && '已经合并', !own.length && '还没有提交', busy(writer), dirty && '先提交改动'),
+        rebase: first(b === 'main' && '这就是 main', merged && '已经合并', !behindN && '已基于最新 main', busy(writer),
+          dirty && '先提交改动', based && '子 agent 的分支基于它'),
+        delete: first(wt?.primary && '主工作区不能移除', b === 'main' && '不能删除 main', busy(working[0]),
+          dirty && '先提交改动', !wt && based && '别的分支基于它'),
+      };
+    }
+    // The git command an action stands for; shown on hover in the menu and in the toast afterwards.
+    function gitCmd(p, kind, b, s) {
+      const where = s.wt && !s.wt.primary ? `-C ../${s.wt.path} ` : '';
+      const msgs = p.msgs[b] || MSGS[b] || ['chore: checkpoint'], msg = msgs[(p.msgN[b] || 0) % msgs.length]; // what commit() will pick next
+      return {
+        commit: `git ${where}commit -am "${msg}"`,
+        push: `git push ${s.diverged ? '--force-with-lease ' : s.upstream ? '' : '-u '}origin ${b}`,
+        merge: `git merge --no-ff ${b}`,
+        rebase: `git ${where}rebase main${s.wt ? '' : ' ' + b}`,
+        delete: s.wt ? `git worktree remove ../${s.wt.path}` : `git branch -D ${b}`,
+      }[kind];
+    }
+    // Whether an agent can pick branch b up as it stands ('' when it can): in its worktree when nobody works there,
+    // otherwise checked out into a new one. Work on main starts on a branch of its own.
+    function takeState(p, b) {
+      if (b === 'main') return '不在 main 上直接改';
+      if (p.merged.has(b)) return '已经合并';
+      const wt = p.worktrees.find(w => w.branch === b), a = wt?.agents.find(x => x.harness !== 'human' && !x.role);
+      if (a) return a.status === 'done' ? `在 ${HARNESS[a.harness].name} 的会话里继续` : `${HARNESS[a.harness].name} 还在工作`;
+      if (!wt && checkoutOf(p, b)) return '子 agent 的 worktree 检出了它';
+      return '';
+    }
+    // Linked worktrees sit next to the repository and take the branch's last part: orbit + claude/dark-mode → orbit-dark-mode.
+    function folderFor(p, b) {
+      const stem = `${p.name}-${b.split('/').filter(Boolean).pop() || 'task'}`;
+      let f = stem, n = 2;
+      while (p.worktrees.some(w => w.path === f)) f = `${stem}-${n++}`;
+      return f;
+    }
+    // The right-click menu: what it acts on at the top (a branch and its worktree, or a commit), then the actions.
+    // One that can't run right now is greyed, with the reason where its hint would be.
+    function menuHTML(p, m) {
+      const mono = text => `<span class="mono">${text}</span>`;
+      // Starting a task: from here on a new branch, or carrying on with a branch nobody is working on.
+      const task = (kind, label, hint, why, cmd) => `<button class="mi" role="menuitem" data-task="${kind}"`
+        + (why ? ' aria-disabled="true">' : cmd ? ` title="${esc(cmd)}">` : '>')
+        + `<span>${label}</span><span class="mi-r">${why ? esc(why) : hint}</span></button>`;
+      const fork = base => base ? `git worktree add -b <新分支> ../${p.name}-<名字> ${sha(base)}` : '';
+      if (m.c) {
+        const c = p.commits.find(x => x.id === m.c);
+        return `<div class="menu-h">${mono(sha(m.c))}<span class="menu-msg">${esc(c ? c.msg : '')}</span></div>`
+          + task('new', '从这个提交开新任务…', '新 worktree', c ? '' : '提交已经不在了', fork(m.c));
+      }
+      const b = m.b, s = gitState(p, b), head = headOf(p, b), take = takeState(p, b);
+      const owner = s.wt?.agents.find(a => a.harness !== 'human')?.harness;
+      const color = ui.mode === 'branch' ? branchColor(p, b) : b === 'main' ? TRUNK : owner ? HARNESS[owner].color : QUIET;
+      const item = (kind, label, hint, cls = '') => `<button class="mi${cls}" role="menuitem" data-git="${kind}"`
+        + (s[kind] ? ' aria-disabled="true">' : ` title="${esc(gitCmd(p, kind, b, s))}">`)
+        + `<span>${label}</span><span class="mi-r">${s[kind] ? esc(s[kind]) : hint}</span></button>`;
+      return `<div class="menu-h">${pill(b, color, s.wt && s.wt.path)}<span>${s.wt ? esc(s.wt.path) : '没有 worktree'}</span></div>`
+        + task('new', '从这里开新任务…', '新 worktree', head ? '' : '还没有提交', fork(head))
+        + task('take', '让 agent 接着做…', s.wt ? `在 ${esc(s.wt.path)} 里` : '检出到新 worktree', take, s.wt ? '' : `git worktree add ../${folderFor(p, b)} ${b}`)
+        + '<div class="menu-sep" role="separator"></div>'
+        + item('commit', '提交', s.wt ? mono(`<span class="add">+${s.wt.add}</span> <span class="del">−${s.wt.del}</span>`) : '')
+        + item('push', s.diverged ? '强制推送' : '推送', s.diverged ? '覆盖 origin' : s.upstream ? mono(`↑${s.ahead}`) : '首次推送')
+        + item('merge', '合并到 main', p.prs[b] ? mono(`#${p.prs[b]}`) : '')
+        + item('rebase', '变基到 main', mono(`↓${s.behind}`))
+        + '<div class="menu-sep" role="separator"></div>'
+        + (m.confirm
+          ? item('delete', '确认删除分支', `丢掉 ${s.own} 个提交`, ' danger on')
+          : item('delete', s.wt ? '移除 worktree' : '删除分支', s.wt ? '分支保留' : `${s.own} 个提交`, ' danger'));
+    }
+
+    function glyph(h, x, y, size, color) {
+      if (h === 'claude') {
+        const r = size * .3;
+        let d = '';
+        for (const deg of [0, 45, 90, 135]) {
+          const dx = Math.cos(deg * Math.PI / 180) * r, dy = Math.sin(deg * Math.PI / 180) * r;
+          d += `M${(x - dx).toFixed(2)} ${(y - dy).toFixed(2)}L${(x + dx).toFixed(2)} ${(y + dy).toFixed(2)}`;
+        }
+        return `<path d="${d}" stroke="${color}" stroke-width="${(size / 11).toFixed(2)}" stroke-linecap="round"/>`;
+      }
+      const [text, scale] = { codex: ['&gt;_', .5], pi: ['π', .74], human: ['你', .52] }[h];
+      return `<text class="gl-${h}" x="${x}" y="${y}" fill="${color}" font-size="${(size * scale).toFixed(1)}" text-anchor="middle" dominant-baseline="central">${text}</text>`;
+    }
+    const avatar = h => h === 'human'
+      ? '<span class="av human">你</span>'
+      : `<span class="av" style="--c:${HARNESS[h].color}"><svg viewBox="0 0 16 16">${glyph(h, 8, 8, 16, HARNESS[h].color)}</svg></span>`;
+    // wt: the worktree this branch is checked out in, if any.
+    const pill = (b, color, wt) => `<span class="pill" style="--c:${color}" title="${esc(b)}${wt ? ` · 检出在 worktree ${esc(wt)}` : ''}">${wt ? FOLDER : ''}<span>${esc(b)}</span></span>`;
+    const diff = wt => `<span class="diff" title="未提交的改动"><span class="add">+${wt.add}</span><span class="del">−${wt.del}</span></span>`;
+    const badge = (x, y, color, d) => `<circle cx="${x}" cy="${y}" r="5" fill="${color}" stroke="${NOW}" stroke-width="1.5"/><path d="${d}" fill="none" stroke="${NOW}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const wtMark = (x, y, color, ghost) => `<rect x="${x - 5.5}" y="${y - 5.5}" width="11" height="11" rx="3" fill="${NOW}" stroke="${color}" stroke-width="1.6"${ghost ? ' stroke-dasharray="2.5 2"' : ''}/>`;
+
+    function bead(r, x, y, ph) {
+      if (r.kind === 'sub') {
+        const color = HARNESS[r.agent.harness].color;
+        return r.sub.status === 'done'
+          ? `<circle cx="${x}" cy="${y}" r="4" fill="${NOW}" stroke="#666c75" stroke-width="1.5"/>`
+          : `<circle cx="${x}" cy="${y}" r="6.5" fill="${NOW}"/><circle class="beat" style="animation-delay:${ph(1400)}" cx="${x}" cy="${y}" r="4.5" fill="${color}"/>`;
+      }
+      const a = r.agent, color = HARNESS[a.harness].color, R = r.lead ? 11 : 9;
+      if (a.harness === 'human') return `<circle cx="${x}" cy="${y}" r="10" fill="${color}" stroke="${NOW}" stroke-width="3"/>${glyph('human', x, y, 20, NOW)}`;
+      // The agent of a task you are still writing: an outline of its avatar.
+      if (a.status === 'draft') return `<circle cx="${x}" cy="${y}" r="${R}" fill="${NOW}" stroke="${color}" stroke-width="1.6" stroke-dasharray="3 2.5"/><g opacity=".8">${glyph(a.harness, x, y, R * 2, color)}</g>`;
+      const quiet = a.status === 'done' || a.status === 'idle';
+      let s = '';
+      if (a.status === 'waiting') s += `<circle class="halo" style="animation-delay:${ph(1800)}" cx="${x}" cy="${y}" r="${R + 1}" fill="none" stroke="${WAITING}" stroke-width="2"/>`;
+      s += `<circle cx="${x}" cy="${y}" r="${R}" fill="${NOW}" stroke="${quiet ? '#5c626b' : color}" stroke-width="1.6"/>`;
+      if (a.status === 'running') {
+        const rr = R + 4, C = 2 * Math.PI * rr;
+        s += `<circle class="spin" style="animation-delay:${ph(1600)}" cx="${x}" cy="${y}" r="${rr}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="${(C * .22).toFixed(1)} ${C.toFixed(1)}"/>`;
+      }
+      s += glyph(a.harness, x, y, R * 2, quiet ? '#9097a0' : color);
+      const bx = x + R * .75;
+      if (a.status === 'done') s += badge(bx, y + R * .75, DONE, `M${bx - 2} ${y + R * .75}l1.4 1.4 2.6-2.8`);
+      if (a.status === 'waiting') s += badge(bx, y - R * .75, WAITING, `M${bx} ${y - R * .75 - 2.2}v2.3m0 1.9v.1`);
+      return s;
+    }
+
+    // Rows and lanes for one project. compact keeps the "now" band plus only the recent history it hangs off.
+    // hold: the pointer is over the band (or a right-click menu from it is open), so its worktrees keep their order.
+    function layout(p, compact, hold) {
+      const map = new Map(p.commits.map(c => [c.id, c]));
+      p.commits.forEach(c => branchColor(p, c.branch));
+      allSubs(p).forEach(s => s.branch && branchColor(p, s.branch));
+
+      // The task you are writing, if it is in this project: its outline goes in the band (see ghostOf()).
+      // fresh: its branch, when that is a new one that doesn't exist yet.
+      const g = ghostOf(p), fresh = g?.wt.ghost && ui.draft.kind === 'new' ? g.wt.branch : null;
+
+      // Who works on each branch right now: the first agent of its worktree, or the agent that spawned the sub-branch.
+      const owner = new Map();
+      for (const wt of p.worktrees) {
+        if (wt.agents.length) owner.set(wt.branch, wt.agents[0].harness);
+        for (const a of wt.agents) for (const s of a.subagents || []) if (s.branch) owner.set(s.branch, a.harness);
+      }
+      if (fresh) owner.set(fresh, g.agent.harness);
+      const laneColor = b => ui.mode === 'branch' ? (b === fresh ? nextColor(p) : branchColor(p, b))
+        : b === 'main' ? TRUNK
+        : owner.has(b) && owner.get(b) !== 'human' ? HARNESS[owner.get(b)].color : QUIET;
+
+      // Rows: the "now" band (worktrees sorted by who needs you first, each heading its agents), then history newest-first.
+      // Held, the band keeps the order it was last shown in and re-sorts once the pointer has left; new worktrees go on top.
+      // The outline of a task you are writing goes on top as well; an outlined agent in an existing worktree doesn't move it.
+      const rank = wt => wt.ghost ? -1 : wt.merged ? 6 : wt.agents.length ? Math.min(...wt.agents.map(a => STATUS[a.status][1])) : 5;
+      const team = wt => g && g.wt === wt && !wt.ghost ? [...wt.agents, g.agent] : wt.agents;
+      const last = p.order || [], rows = [];
+      const wts = (g?.wt.ghost ? [...p.worktrees, g.wt] : p.worktrees)
+        .filter(wt => ui.wts || team(wt).length).map(wt => ({ wt, rank: rank(wt), at: last.indexOf(wt.id) }));
+      wts.sort(hold ? (a, b) => a.at - b.at : (a, b) => a.rank - b.rank);
+      p.order = wts.map(x => x.wt.id);
+      wts.forEach(({ wt }) => {
+        if (ui.wts) rows.push({ kind: 'wt', wt, branch: wt.branch, height: WT_H, ghost: !!wt.ghost });
+        team(wt).forEach((agent, i) => {
+          rows.push({ kind: 'agent', wt, agent, lead: i === 0, branch: wt.branch, hz: agent.harness, height: AGENT_H, ghost: !!agent.ghost });
+          if (ui.subs) for (const sub of agent.subagents || []) {
+            rows.push({ kind: 'sub', wt, agent, sub, branch: sub.branch || wt.branch, hz: agent.harness, height: SUB_H });
+          }
+        });
+      });
+      const nowCount = rows.length;
+
+      // Compact: start history at the oldest commit something in the "now" band sits on, and show at least RECENT commits.
+      let from = 0;
+      if (compact) {
+        const index = new Map(p.commits.map((c, i) => [c.id, i]));
+        const anchors = [...new Set(rows.map(r => r.branch))].map(b => index.get(headOf(p, b))).filter(i => i !== undefined);
+        from = Math.max(0, Math.min(p.commits.length - RECENT, ...anchors));
+      }
+      for (let i = p.commits.length - 1; i >= from; i--) {
+        const c = p.commits[i];
+        rows.push({ kind: 'commit', commit: c, branch: c.branch, hz: c.author, height: ROW_H });
+      }
+      let y = 0;
+      rows.forEach((r, i) => {
+        r.key = keyOf(p, r);
+        r.id = r.kind === 'commit' ? `c:${r.commit.id}` : r.key; // which row this is, for motion (key is what it acts on)
+        if (i === nowCount && nowCount) y += GAP;
+        r.y = y + r.height / 2;
+        y += r.height;
+      });
+      const band = nowCount ? rows[nowCount - 1].y + rows[nowCount - 1].height / 2 : 0; // height of the "now" band
+      const bottom = from ? y + MORE_H : y;
+      const rowOf = new Map();
+      rows.forEach((r, i) => r.kind === 'commit' && rowOf.set(r.commit.id, i));
+
+      // Lanes: each branch occupies the rows between its fork point and its newest row; reuse lanes that are free.
+      // A branch whose older commits are hidden keeps its lane down to the bottom edge.
+      const span = new Map();
+      const touch = (b, i) => {
+        const s = span.get(b);
+        if (s) { s.top = Math.min(s.top, i); s.bottom = Math.max(s.bottom, i); } else span.set(b, { top: i, bottom: i });
+      };
+      rows.forEach((r, i) => {
+        touch(r.branch, i);
+        if (r.kind === 'commit') {
+          r.commit.parents.forEach((pid, k) => {
+            const par = map.get(pid);
+            if (!par) return;
+            if (!rowOf.has(pid)) { if (k === 0) touch(r.branch, rows.length); return; }
+            if (par.branch === r.branch) return;
+            if (k === 0) touch(r.branch, rowOf.get(pid));
+            else touch(par.branch, i);
+          });
+        } else {
+          const head = headOf(p, r.branch);
+          if (rowOf.has(head)) touch(r.branch, rowOf.get(head));
+        }
+      });
+      const lane = new Map([['main', 0]]), taken = [[span.get('main') || { top: 0, bottom: rows.length }]];
+      [...span.keys()].filter(b => b !== 'main')
+        .sort((a, b) => span.get(b).bottom - span.get(a).bottom || span.get(a).top - span.get(b).top)
+        .forEach(b => {
+          const s = span.get(b);
+          let l = (lane.get(parentOf(p, b, map)) ?? 0) + 1;
+          while ((taken[l] || []).some(o => s.top <= o.bottom && o.top <= s.bottom)) l++;
+          lane.set(b, l);
+          (taken[l] ||= []).push(s);
+        });
+      const gx = PAD * 2 + (Math.max(...lane.values()) + 1) * LANE_W;
+      return { p, compact, map, owner, laneColor, rows, nowCount, rowOf, lane, gx, y, bottom, band, hidden: from };
+    }
+
+    // The SVG: edges, then commit dots, then worktree marks and agent beads on top. Mid-slide (m), every position is taken
+    // part-way between where it was drawn and where it is going, so lanes bend along with their rows; new rows fade in.
+    function drawLanes(L, sec, m) {
+      const { p, map, owner, laneColor, rows, nowCount, rowOf, lane, gx, bottom } = L;
+      const left = m ? 1 - m.e : 0, now = performance.now();
+      const X = b => laneX(lane.get(b)) + snap((m?.dX.get(b) || 0) * left);
+      const Y = r => r.y + snap((m?.dY.get(r.id) || 0) * left); // the same offset its row is moved by
+      const alpha = r => m && m.born.has(r.id) ? m.e : 1;
+      const pin = ui.pinned && ui.pinned.p === p.id ? focusSet(p, ui.pinned.b) : null;
+      const on = b => pin && pin.has(b) ? ' on' : '';
+      // Fresh commits and subagents pop in; a redraw mid-pop carries on from where the pop had got to.
+      const pop = x => {
+        if (x.fresh && !popAt.has(x)) popAt.set(x, now);
+        const t = now - (popAt.get(x) ?? -1e9);
+        return t < 450 ? [' pop', ` style="animation-delay:-${Math.round(t)}ms"`] : ['', ''];
+      };
+      const dotColor = c => ui.mode === 'branch' ? branchColor(p, c.branch) : c.author === 'human' ? HUMAN_DOT : HARNESS[c.author].color;
+      const ph = period => `-${(now % period / 1000).toFixed(3)}s`;
+      const path = (d, color, b, h, o = {}) =>
+        `<path data-b="${esc(b)}" class="${off(h)}${on(b)}" d="${d}" fill="none" stroke="${color}" stroke-width="${o.width || 2}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${o.opacity ? ` opacity="${o.opacity}"` : ''}/>`;
+      const curve = (x1, y1, x2, y2) => { const c = (y1 + y2) / 2; return `C${x1} ${c} ${x2} ${c} ${x2} ${y2}`; };
+      let edges = '', nodes = '', beads = '';
+
+      rows.forEach(r => {
+        if (r.kind !== 'commit') return;
+        const c = r.commit, x1 = X(c.branch), y1 = Y(r);
+        c.parents.forEach((pid, j) => {
+          const par = map.get(pid);
+          if (!par) return;
+          if (!rowOf.has(pid)) {
+            // The parent is in the hidden part of history: the lane runs off the bottom and fades out.
+            if (j === 0) edges += path(`M${x1} ${y1}V${bottom}`, laneColor(c.branch), c.branch, owner.get(c.branch));
+            return;
+          }
+          const x2 = X(par.branch), y2 = Y(rows[rowOf.get(pid)]);
+          if (par.branch === c.branch) {
+            edges += path(`M${x1} ${y1}V${y2}`, laneColor(c.branch), c.branch, owner.get(c.branch));
+          } else if (j === 0) {
+            const cy = Math.max(y1, y2 - ROW_H);
+            edges += path(`M${x1} ${y1}V${cy}${curve(x1, cy, x2, y2)}`, laneColor(c.branch), c.branch, owner.get(c.branch));
+          } else {
+            const cy = Math.min(y2, y1 + ROW_H);
+            edges += path(`M${x1} ${y1}${curve(x1, y1, x2, cy)}V${y2}`, laneColor(par.branch), par.branch, owner.get(par.branch));
+          }
+        });
+        const col = dotColor(c), merge = c.parents.length > 1, [pc, ps] = pop(c), a = pc ? 1 : alpha(r);
+        nodes += `<circle data-b="${esc(c.branch)}" class="${pc}${off(c.author)}${on(c.branch)}"${ps}${a < 1 ? ` opacity="${a.toFixed(2)}"` : ''} cx="${x1}" cy="${y1}" r="${merge ? 3.8 : 4.3}" fill="${merge ? PAGE : col}" stroke="${merge ? col : PAGE}" stroke-width="2"/>`;
+      });
+
+      // The "now" band. While a worktree rises past others, the marks of the rows sliding down go on the lower layer,
+      // so the rising rows cover them along with their text.
+      const band = rows.slice(0, nowCount), lists = new Map(), low = { edges: '', beads: '' }, high = { edges: '', beads: '' };
+      const layer = r => m?.cross && (m.dY.get(r.id) || 0) < 0 ? low : high;
+      // Each worktree's rows share its branch lane; a dashed line drops to the commit the worktree sits on.
+      band.forEach(r => { if (!lists.has(r.branch)) lists.set(r.branch, []); lists.get(r.branch).push(r); });
+      for (const [b, list] of lists) {
+        const x = X(b), color = laneColor(b), h = owner.get(b), to = layer(list[0]);
+        // Down to the outlined rows of a task you are writing, the lane is dashed.
+        for (let i = 1; i < list.length; i++) to.edges += path(`M${x} ${Y(list[i - 1])}V${Y(list[i])}`, color, b, h, list[i].ghost ? { dash: '3 4', width: 1.6 } : {});
+        const head = headOf(p, b);
+        if (!rowOf.has(head)) continue;
+        const ly = Y(list[list.length - 1]), hb = map.get(head).branch, y2 = Y(rows[rowOf.get(head)]);
+        const cy = Math.max(ly, y2 - ROW_H);
+        const d = hb === b ? `M${x} ${ly}V${y2}` : `M${x} ${ly}V${cy}${curve(x, cy, X(hb), y2)}`;
+        to.edges += path(d, color, b, h, { dash: '2 5', width: 1.6 });
+      }
+      // A subagent with its own worktree hangs off its parent agent.
+      band.forEach(r => {
+        if (r.kind !== 'sub' || !r.sub.branch) return;
+        const pr = band.find(o => o.kind === 'agent' && o.agent === r.agent);
+        const xa = X(pr.branch) + (pr.lead ? 11 : 9) + 2, xs = X(r.branch), ya = Y(pr);
+        layer(r).edges += path(`M${xa} ${ya}C${xs} ${ya} ${xs} ${ya} ${xs} ${Y(r) - 7}`, HARNESS[r.agent.harness].color, r.branch, r.hz, { dash: '1 4', width: 1.5, opacity: .9 });
+      });
+      band.forEach(r => {
+        const a = alpha(r), faded = s => a < 1 ? `<g opacity="${a.toFixed(2)}">${s}</g>` : s;
+        if (r.kind === 'wt') {
+          layer(r).beads += `<g data-b="${esc(r.branch)}" class="${dim(r)}${on(r.branch)}">${faded(wtMark(X(r.branch), Y(r), r.wt.merged ? RETIRED : laneColor(r.branch), r.ghost))}</g>`;
+          return;
+        }
+        const [pc, ps] = r.kind === 'sub' ? pop(r.sub) : ['', ''], mark = bead(r, X(r.branch), Y(r), ph);
+        layer(r).beads += `<g data-b="${esc(r.branch)}" class="${pc}${off(r.hz)}${on(r.branch)}"${ps}>${pc ? mark : faded(mark)}</g>`;
+      });
+
+      const [under, top] = sec.querySelectorAll('.lanes');
+      for (const svg of [under, top]) {
+        svg.setAttribute('width', gx);
+        svg.setAttribute('height', bottom);
+        svg.setAttribute('viewBox', `0 0 ${gx} ${bottom}`);
+      }
+      setHTML(under, low.edges + low.beads);
+      top.innerHTML = edges + high.edges + nodes + high.beads;
+    }
+
+    // m: the slide from what was on screen to this layout (see moves()), or null to draw it in place.
+    function paint(L, sec, m) {
+      const { p, compact, map, laneColor, rows, nowCount, gx, y, bottom, hidden } = L;
+      const g = sec.querySelector('.graph');
+      const nowEl = sec.querySelector('.now'), histEl = sec.querySelector('.history');
+      const fade = hidden ? `linear-gradient(to bottom, #000 ${y}px, transparent ${bottom}px)` : '';
+      for (const svg of sec.querySelectorAll('.lanes')) svg.style.maskImage = svg.style.webkitMaskImage = fade;
+      // A row that slides starts where it was (frame() walks it home); a new one fades in, unless it is fresh and pops.
+      const motion = (id, fresh = false) => {
+        const d = m?.dY.get(id);
+        return [(d ? ` moving${d > 0 ? ' rise' : ''}` : '') + (m?.born.has(id) && !fresh ? ' fade' : ''), d ? `;transform:translateY(${snap(d)}px)` : ''];
+      };
+
+      // Rows.
+      const tips = new Map();
+      for (const c of p.commits) if (!p.merged.has(c.branch)) tips.set(c.branch, c.id);
+      const tipsAt = new Map();
+      for (const [b, id] of tips) { if (!tipsAt.has(id)) tipsAt.set(id, []); tipsAt.get(id).push(b); }
+      // A finished agent's next step is a look at what it changed; the merge sits under that, in the panel.
+      const reviewBtn = a => `<button class="btn merge" data-act="review" data-id="${a.id}" title="看完改动再决定合并">查看改动</button>`;
+      const draft = ui.draft?.p === p.id ? ui.draft : null;
+      const rowHTML = r => {
+        const fresh = r.kind === 'commit' ? r.commit.fresh : r.kind === 'sub' && r.sub.fresh;
+        const status = r.kind === 'agent' ? ` is-${r.agent.status}` : r.kind === 'wt' && r.wt.merged ? ' is-merged' : '';
+        // Agent and subagent rows open their conversation; the open one is marked. Commit rows can be spotlighted from it.
+        // While you write a task, its outlined agent is the one marked, and the commit it forks off is lit.
+        const chat = ui.chat;
+        const sel = r.ghost && r.kind === 'agent' || chat && (r.kind === 'agent' ? !chat.s && chat.a === r.agent : r.kind === 'sub' && chat.s === r.sub);
+        const spot = r.kind === 'commit' && ui.spot && ui.spot.c === r.commit && Date.now() < ui.spot.until;
+        const from = r.kind === 'commit' && draft?.kind === 'new' && draft.base === r.commit.id;
+        const ids = r.ghost ? ' data-draft' : r.kind === 'commit' ? ` data-c="${r.commit.id}"`
+          : r.kind === 'sub' ? ` data-a="${r.agent.id}" data-s="${r.sub.id}"`
+          : r.kind === 'agent' && r.agent.harness !== 'human' ? ` data-a="${r.agent.id}"` : '';
+        const ctx = ui.menu && ui.menu.p === p.id && ui.menu.key === r.key; // the row the right-click menu belongs to
+        const [mc, ms] = motion(r.id, !!fresh);
+        const open = `<div class="row ${r.kind === 'wt' ? 'wt-row' : r.kind}${status}${dim(r)}${fresh ? ' fresh' : ''}${r.ghost ? ' ghost' : ''}${sel ? ' sel' : ''}${spot ? ' spot' : ''}${from ? ' from' : ''}${ctx ? ' ctx' : ''}${mc}"`
+          + ` data-b="${esc(r.branch)}"${ids} data-key="${esc(r.key)}" style="height:${r.height}px${ms}">`;
+        if (r.kind === 'wt') {
+          // Name, branch, PR and how far behind main on the left; uncommitted changes and lifecycle on the right.
+          const wt = r.wt;
+          const right = wt.ghost ? '<span class="clean">待创建</span>' : wt.merged
+            ? `<span class="state done">已合并到 main</span><button class="btn" data-act="prune" data-id="${wt.id}">移除 worktree</button>`
+            : wt.agents.length
+              ? (wt.add + wt.del ? diff(wt) : '<span class="clean">无改动</span>')
+              : (wt.add + wt.del ? diff(wt) : '') + '<span class="idle">没有 agent</span>';
+          return `${open}<div class="main"><div class="l1">
+              <span class="wt-name" title="${esc(fullPath(p, wt))}">${FOLDER}<span>${esc(wt.path)}</span></span>
+              ${wt.primary ? '<span class="role">主工作区</span>' : ''}
+              ${pill(wt.branch, wt.merged ? RETIRED : laneColor(wt.branch))}
+              ${p.prs[wt.branch] ? `<span class="pr">#${p.prs[wt.branch]}</span>` : ''}${wt.merged ? '' : behind(p, wt.branch, map)}
+            </div></div><div class="meta">${right}</div></div>`;
+        }
+        if (r.kind === 'commit') {
+          const c = r.commit;
+          const pills = (tipsAt.get(c.id) || []).map(b => pill(b, laneColor(b), ui.wts && checkoutOf(p, b))).join('')
+            + (p.tags[c.id] || []).map(t => `<span class="pill tag">${esc(t)}</span>`).join('');
+          return `${open}<div class="main"><div class="l1">${pills}<span class="msg">${esc(c.msg)}</span></div></div>
+            <span class="author" title="${HARNESS[c.author].name}${c.sub ? ' · ' + esc(c.sub) : ''}">${avatar(c.author)}</span>
+            <span class="time">${age(c.ts)}</span><span class="sha">${sha(c.id)}</span></div>`;
+        }
+        if (r.kind === 'sub') {
+          const s = r.sub, done = s.status === 'done';
+          return `${open}<div class="main"><div class="l1"><span class="tree"></span>
+            <span class="sub-name" style="color:${done ? 'var(--muted)' : HARNESS[r.agent.harness].color}">${esc(s.name)}</span>
+            ${done ? '<span class="state done">完成</span>' : ''}<span class="act">${esc(s.activity)}</span></div></div>
+            <div class="meta">${s.branch ? pill(s.branch, laneColor(s.branch)) + `<span class="wt">${FOLDER}${esc(s.path)}</span>` : ''}</div></div>`;
+        }
+        const { agent: a, wt, lead } = r, h = HARNESS[a.harness];
+        // With worktree rows on, branch / PR / path / diff live on the worktree row instead of the lead agent.
+        const meta = lead && !ui.wts ? [
+          pill(wt.branch, laneColor(wt.branch)),
+          p.prs[wt.branch] ? `<span class="pr">#${p.prs[wt.branch]}</span>` : '',
+          behind(p, wt.branch, map),
+          `<span class="wt">${FOLDER}${esc(wt.path)}</span>`,
+          wt.add + wt.del ? diff(wt) : '',
+        ].join('') : '';
+        if (a.harness === 'human') {
+          return `${open}<div class="main"><div class="l1"><span class="who">你</span>${ui.wts ? '<span class="task">在这里</span>' : ''}</div></div><div class="meta">${meta}</div></div>`;
+        }
+        if (a.status === 'draft') {
+          return `${open}<div class="main">
+              <div class="l1"><span class="who" style="color:${h.color}">${h.name}</span><span class="state draft">新任务</span>
+                <span class="task${a.task ? '' : ' empty'}">${esc(a.task || '还没写任务')}</span></div>
+              <div class="l2"><span class="note-l">在右侧写下任务，Enter 开始</span></div>
+            </div><div class="meta">${meta}</div></div>`;
+        }
+        const time = a.status === 'running' || a.status === 'waiting' ? ` <em>${dur(a.elapsed)}</em>` : '';
+        const line2 = a.status === 'waiting'
+          ? `<span class="ask">${esc(a.activity)}</span><button class="btn allow" data-act="allow" data-id="${a.id}">允许</button><button class="btn" data-act="deny" data-id="${a.id}">拒绝</button>`
+          : `<span class="act">${esc(a.activity)}</span>${a.status === 'done' && lead ? reviewBtn(a) : ''}`;
+        return `${open}<div class="main">
+            <div class="l1"><span class="who" style="color:${h.color}">${h.name}</span>${a.role ? `<span class="role">${a.role}</span>` : ''}
+              <span class="state ${a.status}"${a.status === 'running' ? ` style="color:${h.color}"` : ''}>${STATUS[a.status][0]}${time}</span>
+              <span class="task">${esc(a.task)}</span></div>
+            <div class="l2">${line2}</div>
+          </div><div class="meta">${meta}</div></div>`;
+      };
+
+      const linked = p.worktrees.length + allSubs(p).filter(s => s.branch).length;
+      const stats = [['waiting', WAITING], ['running', '#d5d8dd'], ['done', DONE]]
+        .map(([s, c]) => { const n = agentCount([p], s); return n ? `<span><i style="background:${c}"></i>${n} ${STATUS[s][0]}</span>` : ''; })
+        .join('') + `<span>${linked} 个 worktree</span>`;
+      sec.querySelector('.phead').innerHTML = (compact ? `<button class="pname" data-go="${p.id}" title="只看 ${esc(p.name)}">${esc(p.name)}</button>` : `<span class="pname">${esc(p.name)}</span>`)
+        + `<span class="ppath">${esc(p.path)}</span><span class="pstats">${stats}</span>`
+        + `<button class="pnew" data-new title="从 main 的最新提交开新任务">${PLUS}新任务</button>`;
+
+      // Mid-slide the gutter and the band's background start from where they were too.
+      g.style.setProperty('--gx', snap(gx + (m?.dGx || 0)) + 'px');
+      nowEl.style.setProperty('--lag', snap(-(m?.dBand || 0)) + 'px');
+      nowEl.hidden = !nowCount;
+      histEl.style.marginTop = nowCount ? GAP + 'px' : '0';
+      nowEl.innerHTML = rows.slice(0, nowCount).map(rowHTML).join('');
+      const [mc, ms] = motion('more');
+      histEl.innerHTML = rows.slice(nowCount).map(rowHTML).join('')
+        + (hidden ? `<div class="row more${mc}" data-key="more" style="height:${MORE_H}px${ms}">更早的 ${hidden} 个提交<button class="link" data-go="${p.id}">查看完整历史</button></div>` : '');
+      // The rows that slide, each with how far it has to go; frame() moves them along.
+      if (m) Object.assign(m, { g, nowEl, els: [...sec.querySelectorAll('.row.moving')].map(el => [el, m.dY.get(el.dataset.c ? `c:${el.dataset.c}` : el.dataset.key)]) });
+      drawLanes(L, sec, m);
+    }
+
+    function render() {
+      stale = false;
+      const list = scope(), compact = ui.project === 'all';
+      const key = list.map(p => p.id).join(' ');
+      root.classList.toggle('cols', compact);
+      if (root.dataset.scope !== key) {
+        root.dataset.scope = key;
+        root.innerHTML = list.map(p => `<section class="project" data-p="${p.id}"><div class="phead"></div><div class="graph"><svg class="lanes sunk"></svg><svg class="lanes top"></svg><div class="now"></div><div class="history"></div></div></section>`).join('');
+        shown.clear(); // new columns appear in place
+      }
+      // Rows slide to new places, unless motion is reduced or nobody is looking.
+      const motion = !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      held = heldProject();
+      for (const p of list) {
+        const sec = root.querySelector(`.project[data-p="${p.id}"]`);
+        const L = layout(p, compact, held === p.id || ui.menu?.p === p.id);
+        p.gutter = Math.max(p.gutter || 0, L.gx); // widest lane gutter so far, so column widths do not jump as lanes come and go
+        const was = shown.get(p.id), m = motion && was ? moves(was, L) : null;
+        paint(L, sec, m);
+        shown.set(p.id, { sec, L, m });
+        if (m) raf ||= requestAnimationFrame(frame);
+      }
+      // Side by side, each column gets the room its lanes need plus the same text width, so busy repos are not squeezed.
+      root.style.gridTemplateColumns = compact ? list.map(p => `minmax(${p.gutter + 260}px, ${p.gutter + 340}fr)`).join(' ') : '';
+      renderBar();
+      for (const p of state.projects) {
+        p.commits.forEach(c => { c.fresh = false; });
+        allSubs(p).forEach(s => { s.fresh = false; });
+      }
+      applyFocus();
+      renderChat();
+      renderLegend();
+    }
+
+    // Where everything of a project is on screen right now, part-way through a slide if one is running.
+    function shownAt(s, now) {
+      const { L, m } = s, left = m ? 1 - ease(Math.min(1, (now - m.start) / MOVE_MS)) : 0;
+      const ys = new Map(), xs = new Map();
+      for (const r of L.rows) ys.set(r.id, r.y + (m?.dY.get(r.id) || 0) * left);
+      if (L.hidden) ys.set('more', L.y + MORE_H / 2 + (m?.dY.get('more') || 0) * left);
+      for (const [b, l] of L.lane) xs.set(b, laneX(l) + (m?.dX.get(b) || 0) * left);
+      return { ys, xs, band: L.band + (m?.dBand || 0) * left, gx: L.gx + (m?.dGx || 0) * left };
+    }
+    // The slide from what is on screen to a new layout: rows that move (dY), lanes that shift (dX), rows that are new,
+    // and the band's height and gutter width. null when nothing moves.
+    function moves(s, L) {
+      const now = performance.now(), from = shownAt(s, now), near = (a, b) => Math.abs(a - b) < .5;
+      const m = { start: now, e: 0, dY: new Map(), dX: new Map(), born: new Set(), dBand: 0, dGx: 0, els: [] };
+      for (const r of L.rows) {
+        const o = from.ys.get(r.id);
+        if (o === undefined) m.born.add(r.id); else if (!near(o, r.y)) m.dY.set(r.id, o - r.y);
+      }
+      const om = from.ys.get('more'), ym = L.y + MORE_H / 2;
+      if (L.hidden && om !== undefined && !near(om, ym)) m.dY.set('more', om - ym);
+      for (const [b, l] of L.lane) {
+        const o = from.xs.get(b);
+        if (o !== undefined && !near(o, laneX(l))) m.dX.set(b, o - laneX(l));
+      }
+      if (from.band && L.band && !near(from.band, L.band)) m.dBand = from.band - L.band;
+      if (!near(from.gx, L.gx)) m.dGx = from.gx - L.gx;
+      // Rows in the band pass each other: some rise while others sink.
+      const band = L.rows.slice(0, L.nowCount).map(r => m.dY.get(r.id) || 0);
+      m.cross = band.some(d => d > 0) && band.some(d => d < 0);
+      return m.dY.size || m.dX.size || m.born.size || m.dBand || m.dGx ? m : null;
+    }
+    // One step of every slide in progress: rows, the band's background, the gutter and the lanes move together.
+    function frame() {
+      raf = 0;
+      const now = performance.now();
+      for (const s of shown.values()) {
+        const m = s.m;
+        if (!m) continue;
+        const t = Math.min(1, (now - m.start) / MOVE_MS);
+        m.e = ease(t);
+        const left = 1 - m.e;
+        for (const [el, d] of m.els) el.style.transform = left ? `translateY(${snap(d * left)}px)` : '';
+        if (m.dBand) m.nowEl.style.setProperty('--lag', snap(-m.dBand * left) + 'px');
+        if (m.dGx) m.g.style.setProperty('--gx', snap(s.L.gx + m.dGx * left) + 'px');
+        if (t === 1) {
+          for (const [el] of m.els) el.classList.remove('moving', 'rise');
+          s.m = null;
+        }
+        drawLanes(s.L, s.sec, s.m);
+        if (s.m) raf ||= requestAnimationFrame(frame);
+      }
+    }
+    // Scroll a row into view where it is going, not where its slide starts.
+    function reveal(el, opts) {
+      if (!el) return;
+      const t = el.style.transform;
+      el.style.transform = '';
+      el.scrollIntoView(opts);
+      el.style.transform = t;
+    }
+
+    // The legend draws its samples with the same helpers as the graph (wtMark, bead, pill, diff), so the two always match.
+    function renderLegend() {
+      const el = $('legend');
+      el.hidden = !ui.legend;
+      $('legend-btn').setAttribute('aria-pressed', ui.legend);
+      if (!ui.legend) return;
+      const c = HARNESS.claude.color, byBranch = ui.mode === 'branch', still = () => '0s';
+      const svg = (body, box = '0 0 24 24') => `<svg viewBox="${box}" aria-hidden="true">${body}</svg>`;
+      const item = (sample, label) => `<div class="lg-item"><span class="lg-s">${sample}</span><span>${label}</span></div>`;
+      const agent = status => svg(bead({ kind: 'agent', agent: { harness: 'claude', status }, lead: false }, 12, 12, still), '-3 -3 30 30');
+      const dots = byBranch ? [PALETTE[2], PALETTE[3], PALETTE[4]] : [c, HARNESS.codex.color, HUMAN_DOT];
+      const colors = byBranch ? '<span>每个分支一种颜色</span>'
+        : [[c, 'Claude Code'], [HARNESS.codex.color, 'Codex'], [HARNESS.pi.color, 'Pi'], [TRUNK, 'main'], [QUIET, '闲置分支']]
+          .map(([col, name]) => `<span><i style="background:${col}"></i>${name}</span>`).join('');
+      setHTML(el, `<div class="lg-head">图例<button class="x" data-close title="关闭图例" aria-label="关闭图例">${CLOSE}</button></div>
+        <div class="lg-cols">
+          <div>
+            <div class="lg-sec">上方 · worktree 和 agent</div>
+            ${item(svg(`<path d="M12 11V15" stroke="${c}" stroke-width="2"/>${wtMark(12, 5.5, c)}<circle cx="12" cy="19" r="4" fill="${NOW}" stroke="${c}" stroke-width="1.6"/>`), 'worktree 和里面的 agent')}
+            ${item(svg(`<path d="M12 1V14" stroke="${c}" stroke-width="1.6" stroke-dasharray="2 5" stroke-linecap="round"/><circle cx="12" cy="19" r="4.3" fill="${c}" stroke="${PAGE}" stroke-width="2"/>`), '虚线：worktree 停在的提交')}
+            ${item(svg(`<circle cx="5" cy="5" r="3.5" fill="${NOW}" stroke="${c}" stroke-width="1.5"/><path d="M9 5C19 5 19 5 19 15" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="1 4" stroke-linecap="round"/><circle cx="19" cy="19" r="3" fill="${c}"/>`), '点线：子 agent 开的 worktree')}
+            ${item(svg(wtMark(12, 12, RETIRED)), '已合并，目录还没移除')}
+            ${item('<span class="behind">↓1</span>', '分出来后 main 新增的提交')}
+            ${item(diff({ add: 3, del: 1 }), '还没提交的改动')}
+          </div>
+          <div>
+            <div class="lg-sec">agent 状态</div>
+            <div class="lg-grid">
+              ${item(agent('running'), '运行中')}${item(agent('waiting'), '等你')}
+              ${item(agent('done'), '完成')}${item(svg(bead({ kind: 'sub', agent: { harness: 'claude' }, sub: { status: 'running' } }, 12, 12, still)), '子 agent')}
+            </div>
+            <div class="lg-sec">下方 · 提交历史</div>
+            ${item(svg(dots.map((col, i) => `<circle cx="${4.5 + i * 7.5}" cy="12" r="3.2" fill="${col}"/>`).join('')), byBranch ? '提交，颜色是分支' : '提交，颜色是作者')}
+            ${item(svg(`<circle cx="12" cy="12" r="3.8" fill="${PAGE}" stroke="${TRUNK}" stroke-width="2"/>`), '合并提交')}
+            ${item(pill('main', TRUNK, 'orbit'), '分支检出在 worktree 里')}
+            ${item(pill('spike/sqlc', QUIET), '分支没有 worktree')}
+          </div>
+        </div>
+        <div class="lg-colors">泳道颜色：${colors}</div>
+        <div class="lg-tip">右键 worktree、agent 或提交：开新任务，以及提交、推送、合并、变基、删除</div>`);
+    }
+
+    function renderBar() {
+      setHTML($('projects'), REPO + [{ id: 'all', name: '全部' }, ...state.projects].map(p => {
+        const waiting = p.worktrees ? agentCount([p], 'waiting') : 0, running = p.worktrees ? agentCount([p], 'running') : 0;
+        const badge = waiting ? `<span class="n" title="${waiting} 个 agent 在等你">${waiting}</span>` : running ? '<span class="dot" title="有 agent 在运行"></span>' : '';
+        return `<button data-p="${p.id}" aria-pressed="${ui.project === p.id}">${esc(p.name)}${badge}</button>`;
+      }).join(''));
+      const ps = scope();
+      setHTML($('sum'), [['waiting', WAITING], ['running', '#d5d8dd'], ['done', DONE]]
+        .map(([s, c]) => { const n = agentCount(ps, s); return n ? `<button data-status="${s}" title="打开下一个「${STATUS[s][0]}」的 agent"><i style="background:${c}"></i>${n} ${STATUS[s][0]}</button>` : ''; })
+        .join(''));
+    }
+
+    function focusSet(p, b) {
+      const set = new Set([b]);
+      const wt = p.worktrees.find(w => w.branch === b);
+      if (wt) for (const a of wt.agents) for (const s of a.subagents || []) if (s.branch) set.add(s.branch);
+      return set;
+    }
+    function applyFocus() {
+      const f = ui.pinned;
+      root.querySelectorAll('.project').forEach(sec => {
+        const p = projectOf(sec.dataset.p), set = f && p && f.p === p.id ? focusSet(p, f.b) : null;
+        const g = sec.querySelector('.graph');
+        g.classList.toggle('focusing', !!set);
+        g.querySelectorAll('[data-b]').forEach(el => el.classList.toggle('on', !!set && set.has(el.dataset.b)));
+      });
+    }
+
+    function commit(p, branch, author, sub) {
+      const parent = headOf(p, branch), n = (p.msgN[branch] = (p.msgN[branch] || 0) + 1);
+      const msgs = p.msgs[branch] || MSGS[branch] || MSGS[sub] || ['chore: checkpoint'];
+      const c = { id: 'n' + (++state.seq), branch, parents: parent ? [parent] : [], msg: msgs[(n - 1) % msgs.length], author, sub, ts: Date.now(), fresh: true };
+      p.commits.push(c);
+      const wt = p.worktrees.find(w => w.branch === branch);
+      // What was uncommitted goes into the branch. A subagent's own branch has no worktree here, so it brings a bit of its own.
+      const who = wt ? wt.agents.find(a => a.harness === author && !a.role) || wt.agents.find(a => !a.role && a.harness !== 'human')
+        : allSubs(p).find(s => s.branch === branch);
+      fold(p, branch, wt ? wt.add : rnd(6, 40), wt ? wt.del : rnd(0, 8), who);
+      if (wt) { wt.add = rnd(0, 6); wt.del = rnd(0, 2); }
+      return c;
+    }
+    // Lines committed on a branch land on the file its agent was last editing (or the branch's first file; on a new
+    // branch, the first file the agent's task script edits).
+    function fold(p, branch, add, del, who) {
+      if (branch === 'main' || !(add + del)) return;
+      const files = p.changes[branch] ||= new Map();
+      const writes = x => x.name === 'Edit' || x.name === 'Write';
+      const e = who?.log?.findLast(x => x.t === 'tool' && writes(x)) || (who?.script || []).map(tool).find(writes);
+      const path = e?.arg || [...files.keys()][0];
+      if (!path) return;
+      const f = files.get(path) || { path, st: e?.name === 'Write' ? 'A' : 'M', add: 0, del: 0 };
+      f.add += add;
+      if (f.st !== 'A') f.del += del; // a new file has nothing to remove
+      files.set(path, f);
+    }
+    // A subagent's branch merged back into its parent's: its files become part of the parent branch.
+    function absorb(p, from, to) {
+      for (const f of p.changes[from]?.values() || []) {
+        const files = p.changes[to] ||= new Map(), g = files.get(f.path);
+        if (g) { g.add += f.add; g.del += f.del; } else files.set(f.path, { ...f });
+      }
+    }
+    function spawn(p, a, wt) {
+      const used = new Set(a.subagents.map(s => s.name));
+      const free = TEMPLATES.filter(t => !used.has(t.name));
+      if (!free.length) return;
+      const t = free[Math.floor(Math.random() * free.length)];
+      const [task, prompt] = SUB_TASK[t.name];
+      const s = { id: 's' + (++state.seq), name: t.name, task, status: 'running', activity: SUB_SCRIPT[t.name][0], fresh: true };
+      s.log = [{ t: 'user', text: prompt }, tool(s.activity)];
+      if (t.own) {
+        const stem = wt.branch.split('/').pop();
+        let b = `${stem}/${t.name}`, n = 2;
+        while (p.commits.some(c => c.branch === b) || allSubs(p).some(x => x.branch === b)) b = `${stem}/${t.name}-${n++}`;
+        Object.assign(s, { branch: b, path: `.claude/worktrees/${b.split('/').pop()}`, base: tipOf(p, wt.branch) });
+      }
+      a.subagents.push(s);
+      say(a, { t: 'spawn', s });
+    }
+    function finish(p, s, a, wt) {
+      s.status = 'done';
+      say(s, { t: 'text', text: SUB_DONE[s.name] || '完成。' });
+      if (s.branch && tipOf(p, s.branch)) {
+        const m = { id: 'n' + (++state.seq), branch: wt.branch, parents: [tipOf(p, wt.branch), tipOf(p, s.branch)], msg: `Merge ${s.branch}`, author: a.harness, ts: Date.now(), fresh: true };
+        p.commits.push(m);
+        p.merged.add(s.branch);
+        absorb(p, s.branch, wt.branch);
+        s.activity = `已合并回 ${wt.branch}`;
+        say(a, { t: 'commit', c: m });
+      } else {
+        s.activity = '已返回结果';
+      }
+    }
+    // Move an agent on to its next scripted tool call; the transcript records each call as it starts.
+    function step(x, list, talk) {
+      const next = pick(list || [x.activity], x.activity);
+      if (next === x.activity) return;
+      if (talk && Math.random() < .12) say(x, { t: 'text', text: pick(SAYS) });
+      x.activity = next;
+      say(x, tool(next));
+    }
+
+    function tick() {
+      for (const p of state.projects) for (const wt of [...p.worktrees]) for (const a of wt.agents) {
+        if (a.harness === 'human') continue;
+        if (a.status === 'running' || a.status === 'waiting') a.elapsed += TICK / 1000;
+        if (a.status === 'running') {
+          if (Math.random() < .5) step(a, SCRIPT[a.id] || a.script, true);
+          if (!a.role) {
+            wt.add += rnd(0, 7);
+            wt.del += rnd(0, 3);
+            if (Math.random() < .035) say(a, { t: 'commit', c: commit(p, wt.branch, a.harness) });
+          }
+          if (a.work && --a.work === 0) {
+            // A task you started, or a follow-up you sent, has been handled: the agent commits what it changed, and
+            // review comments it was handed count as dealt with.
+            if (wt.add + wt.del) { say(a, { t: 'commit', c: commit(p, wt.branch, a.harness) }); wt.add = wt.del = 0; }
+            a.status = 'done';
+            if (a.fixing) {
+              wt.resolved = new Set([...(wt.resolved || []), ...a.fixing]);
+              a.activity = `已处理 ${a.fixing.length} 条评论`;
+              say(a, { t: 'text', text: `${a.fixing.length} 条评论都改好了，测试通过，已提交。` });
+              a.fixing = null;
+            } else if (a.brief) {
+              const n = filesOf(p, wt.branch).length;
+              a.brief = false;
+              a.activity = `${n} 个文件 · 测试通过`;
+              say(a, { t: 'text', text: `完成了：改了 ${n} 个文件，测试都通过。可以在「改动」里看看，没问题就合并。` });
+            } else {
+              a.activity = '按你说的改好了';
+              say(a, { t: 'text', text: '改好了，相关测试都通过。还有要调整的吗？' });
+            }
+          } else if (a.role === 'review' && Math.random() < .03) {
+            a.status = 'done';
+            a.activity = '留下 4 条评论';
+            say(a, { t: 'text', text: 'Review 完成，留下 4 条评论：进度存储缺版本号、邀请用户的跳转少一个测试，另有两处命名。' });
+          } else if (a.ask && Math.random() < .012) {
+            a.status = 'waiting';
+            [a.activity, a.pending] = a.ask;
+            say(a, { t: 'ask', text: a.ask[0], cmd: a.ask[1], res: null });
+          } else if (a.spawns && a.subagents.length < 3 && Math.random() < .05) spawn(p, a, wt);
+        }
+        for (const s of [...(a.subagents || [])]) {
+          if (s.status === 'running') {
+            if (Math.random() < .5) step(s, SUB_SCRIPT[s.name]);
+            if (s.branch && Math.random() < .07) say(s, { t: 'commit', c: commit(p, s.branch, a.harness, s.name) });
+            if (Math.random() < .035) finish(p, s, a, wt);
+          } else if (Math.random() < .06) {
+            a.subagents.splice(a.subagents.indexOf(s), 1);
+          }
+        }
+      }
+      // While you press or aim at something in the graph it holds still; the panel and the counts keep going.
+      if (pressing) stale = true;
+      else if (aiming()) { stale = true; renderBar(); renderChat(); }
+      else render();
+    }
+
+    function act(p, kind, id) {
+      if (kind === 'merge' || kind === 'prune' || kind === 'commit') {
+        // 合并, 移除 worktree and 提交 (on rows and in the 改动 tab) follow the same rules as the right-click menu.
+        const wt = p.worktrees.find(w => w.id === id);
+        if (wt) gitAct(p, { merge: 'merge', prune: 'delete', commit: 'commit' }[kind], wt.branch);
+        return;
+      } else if (kind === 'review') {
+        // 查看改动 on a finished agent: its panel, open on the 改动 tab.
+        const a = p.worktrees.flatMap(w => w.agents).find(x => x.id === id);
+        if (a) openChat(p, a, null, false, 'changes');
+        return;
+      } else {
+        const a = p.worktrees.flatMap(w => w.agents).find(x => x.id === id);
+        const ask = a.log.findLast(e => e.t === 'ask' && !e.res);
+        if (ask) ask.res = kind;
+        a.status = 'running';
+        a.activity = kind === 'allow' ? a.pending : '已拒绝 · 改用只读检查';
+        say(a, kind === 'allow' ? tool(a.pending) : { t: 'text', text: '好，不运行这个命令，先用只读的方式检查。' });
+      }
+      render();
+    }
+
+    // The 合并 / 移除 worktree buttons on rows run the same actions as the menu, under the same rules.
+    function gitAct(p, kind, b) {
+      const s = gitState(p, b);
+      if (!s[kind]) gitDo(p, kind, b, s);
+    }
+    function gitDo(p, kind, b, s) {
+      const wt = s.wt, cmd = gitCmd(p, kind, b, s);
+      const tell = text => wt && wt.agents.forEach(a => a.harness !== 'human' && say(a, { t: 'note', text }));
+      if (kind === 'commit') {
+        commit(p, b, 'human');
+        wt.add = wt.del = 0;
+        tell('你提交了工作区的改动');
+        toast('已提交', cmd);
+      } else if (kind === 'push') {
+        p.remote[b] = s.tip;
+        toast('已推送', cmd);
+      } else if (kind === 'merge') {
+        const pr = p.prs[b];
+        p.commits.push({ id: 'n' + (++state.seq), branch: 'main', parents: [tipOf(p, 'main'), s.tip], msg: `Merge ${pr ? `#${pr} ` : ''}${b}`, author: 'human', ts: Date.now(), fresh: true });
+        p.merged.add(b);
+        if (wt) {
+          // Merging finishes the agents, but the worktree stays on disk until you remove it.
+          tell('已合并到 main，会话结束');
+          Object.assign(wt, { merged: true, agents: [], add: 0, del: 0 });
+        }
+        toast('已合并到 main', cmd);
+      } else if (kind === 'rebase') {
+        const n = rebase(p, b);
+        tell('你把分支变基到了最新的 main');
+        toast(`已变基 ${n} 个提交`, cmd);
+      } else if (kind === 'delete') {
+        if (wt) {
+          tell('worktree 已移除，会话结束');
+          p.worktrees = p.worktrees.filter(w => w !== wt);
+          toast(wt.merged ? '已移除 worktree' : '已移除 worktree，分支保留', cmd);
+        } else {
+          p.commits = p.commits.filter(c => c.branch !== b);
+          delete p.remote[b];
+          delete p.changes[b];
+          toast('已删除分支', cmd);
+        }
+        if (ui.pinned?.b === b) ui.pinned = null;
+      }
+      render();
+    }
+
+    // Right-click menu. It is drawn once when it opens, like a native menu; a click re-checks the action before running it.
+    function openMenu(p, key, x, y) {
+      const b = menuBranch(p, key), c = !b && key.startsWith('c:') ? key.slice(2) : null;
+      if (!b && !c) return false;
+      ui.menu = { p: p.id, b, c, key, x, y, confirm: false, back: document.activeElement };
+      drawMenu();
+      outline();
+      $('menu').focus({ preventScroll: true });
+      return true;
+    }
+    // Opening and closing only move the outline, without re-rendering rows, so a right-click that closes one menu
+    // still lands on the row it was aimed at. Re-renders pick the outline up from ui.menu.
+    function outline() {
+      const m = ui.menu;
+      root.querySelectorAll('.row.ctx').forEach(r => r.classList.remove('ctx'));
+      if (m) root.querySelectorAll(`.project[data-p="${m.p}"] .row`).forEach(r => r.dataset.key === m.key && r.classList.add('ctx'));
+    }
+    function drawMenu() {
+      const m = ui.menu, el = $('menu');
+      el.innerHTML = menuHTML(projectOf(m.p), m);
+      el.hidden = false;
+      // At the pointer, flipped left or up when it would run off the screen, and always kept inside it.
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const x = m.x + w > innerWidth - 8 ? m.x - w : m.x, y = m.y + h > innerHeight - 8 ? m.y - h : m.y;
+      el.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+      el.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+    }
+    function closeMenu() {
+      const m = ui.menu, el = $('menu');
+      if (!m) return;
+      const focused = el.contains(document.activeElement);
+      ui.menu = null;
+      el.hidden = true;
+      if (focused) m.back?.focus?.({ preventScroll: true });
+      outline();
+    }
+    // Replay the branch's own commits on top of main. Subagent branches merged into it stay merges.
+    function rebase(p, b) {
+      const copies = new Map();
+      let parent = tipOf(p, 'main');
+      for (const c of p.commits.filter(x => x.branch === b)) {
+        const n = { ...c, id: 'n' + (++state.seq), parents: [parent, ...c.parents.slice(1)], ts: Date.now(), fresh: true };
+        copies.set(c.id, n);
+        parent = n.id;
+      }
+      p.commits = p.commits.filter(c => c.branch !== b).concat([...copies.values()]);
+      // Transcripts that mention the old commits now point at the rewritten ones.
+      for (const wt of p.worktrees) for (const a of wt.agents) for (const x of [a, ...(a.subagents || [])]) {
+        for (const e of x.log || []) if (e.t === 'commit' && copies.has(e.c.id)) e.c = copies.get(e.c.id);
+      }
+      return copies.size;
+    }
+    let toastTimer = null;
+    function toast(what, cmd) {
+      const el = $('toast');
+      el.innerHTML = `<b>${esc(what)}</b>${cmd ? `<code>${esc(cmd)}</code>` : ''}`;
+      el.classList.add('on');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('on'), 2800);
+    }
+
+    function setLive() {
+      clearInterval(timer);
+      timer = ui.live ? setInterval(tick, TICK) : null;
+    }
+    function go(id) {
+      if (ui.project === id) return;
+      ui.project = id;
+      ui.pinned = null;
+      render();
+      root.scrollLeft = 0;
+      window.scrollTo(0, 0);
+    }
+
+    // The conversation panel: transcript and prompt for the agent (or subagent) picked in the graph.
+    // tab: 'chat', the conversation, or 'changes', what the worktree's branch changes against main (and the merge).
+    function openChat(p, a, s = null, toggle = false, tab = 'chat') {
+      const c = ui.chat;
+      if (toggle && c && c.a === a && c.s === s) { closeChat(); return; }
+      ui.draft = null; // a task you were writing keeps its text for next time (taskText)
+      if (!c || c.a !== a) $('prompt').value = drafts.get(a) || '';
+      const wt = p.worktrees.find(w => w.agents.includes(a)), same = c && c.wt === wt;
+      // Files you opened stay open while you move between the agents of one worktree.
+      ui.chat = { p, a, s, wt, stick: true, tab, open: same ? c.open : new Set(), seen: same && c.seen };
+      if (tab === 'changes') showChanges(ui.chat);
+      ui.pinned = null;
+      render();
+      fit();
+      // The panel narrows the graph; keep the picked row in view.
+      reveal(root.querySelector('.row.sel'), { block: 'nearest', inline: 'nearest' });
+      if (!s) $('prompt').focus({ preventScroll: true });
+    }
+    function closeChat() {
+      ui.chat = null;
+      render();
+    }
+    function fit() {
+      const ta = $('prompt');
+      if ($('composer').hidden) return;
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 168) + 'px';
+    }
+
+    function renderChat() {
+      const c = ui.chat, d = ui.draft;
+      document.body.classList.toggle('chatting', !!(c || d));
+      $('panel').hidden = !(c || d);
+      $('panel').setAttribute('aria-label', d ? '新任务' : 'Agent 对话');
+      $('draft').hidden = !d;
+      if (d) { renderDraft(d); return; }
+      if (!c) return;
+      const { p, a, s } = c, x = s || a, h = HARNESS[a.harness];
+      c.wt = p.worktrees.find(w => w.agents.includes(a)) || c.wt;
+      // Merging a worktree ends its agents' sessions; the transcript stays readable.
+      const wt = c.wt, ended = !p.worktrees.includes(wt) || !wt.agents.includes(a);
+      const tab = s ? 'chat' : c.tab; // subagents only have their conversation
+      const rv = reviewOf(wt), flagged = rv?.comments.some(n => !n.done);
+      const tabs = s ? '' : '<div class="tabs" role="tablist" aria-label="面板内容">'
+        + `<button class="tab" role="tab" data-tab="chat" aria-selected="${tab === 'chat'}">对话</button>`
+        + `<button class="tab" role="tab" data-tab="changes" aria-selected="${tab === 'changes'}">改动<span class="n">${filesOf(p, wt.branch).length}</span>`
+        + `${flagged ? '<span class="flag" title="有没处理的 review 评论"></span>' : ''}</button></div>`;
+      const lane = b => ui.mode === 'branch' ? branchColor(p, b) : wt.merged ? RETIRED : h.color;
+      const running = x.status === 'running';
+      const time = !s && !ended && (running || x.status === 'waiting') ? ` <em>${dur(a.elapsed)}</em>` : '';
+      const state = ended ? `<span class="state${wt.merged ? ' done' : ''}">${wt.merged ? '已合并' : '已结束'}</span>`
+        : `<span class="state ${x.status}"${running ? ` style="color:${h.color}"` : ''}>${STATUS[x.status][0]}${time}</span>`;
+      const close = `<button class="x" data-close title="关闭（Esc）" aria-label="关闭">${CLOSE}</button>`;
+      const where = (path, b) => `<span class="wt-name">${FOLDER}<span>${esc(path)}</span></span>${pill(b, lane(b))}`;
+      setHTML($('chat-head'), s
+        ? `<div class="ph1"><button class="back" data-parent title="回到 ${h.name} 的对话">‹ ${h.name}</button><span class="crumb">/</span>
+             <span class="who" style="color:${s.status === 'done' ? 'var(--secondary)' : h.color}">${esc(s.name)}</span>${state}${close}</div>
+           <div class="ph-task">${esc(s.task || s.name)}</div>
+           <div class="ph-ctx"><span>${esc(p.name)} · 子 agent</span>${s.branch ? where(s.path, s.branch) : where(wt.path, wt.branch)}</div>`
+        : `<div class="ph1">${avatar(a.harness)}<span class="who" style="color:${h.color}">${h.name}</span>${a.role ? `<span class="role">${a.role}</span>` : ''}${state}${close}</div>
+           <div class="ph-task">${esc(a.task)}</div>
+           <div class="ph-ctx"><span>${esc(p.name)}</span>${where(wt.path, wt.branch)}${p.prs[wt.branch] ? `<span class="pr">#${p.prs[wt.branch]}</span>` : ''}</div>${tabs}`);
+
+      $('chat-list').hidden = tab !== 'chat';
+      $('review').hidden = tab !== 'changes';
+      $('decide').hidden = tab !== 'changes' || !p.worktrees.includes(wt);
+      if (tab === 'changes') {
+        patch($('review'), reviewItems(c));
+        setHTML($('decide'), decideHTML(c));
+      } else {
+        // Messages. The newest tool call spins while the agent runs; otherwise a "thinking" line stands in for it.
+        const log = x.log || [], live = !ended && running, last = log.length - 1;
+        const items = log.map((e, i) => entryHTML(e, i, c, live && i === last, ended));
+        if (live && log[last]?.t !== 'tool') items.push(`<div class="m tool live" style="--c:${h.color}"><span class="tn">思考中…</span></div>`);
+        const list = $('chat-list');
+        const atEnd = c.stick || list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+        patch(list, items);
+        if (atEnd) list.scrollTop = list.scrollHeight; // follow new messages unless you scrolled up to read
+        c.stick = false;
+      }
+
+      // Prompt box. Subagents take instructions from their parent only; ended sessions take none.
+      const note = s ? `子 agent 只接收 ${h.name} 的指令。<button class="link" data-parent>回到 ${h.name}</button>`
+        : ended ? `${wt.merged ? 'worktree 已合并到 main，' : ''}这个会话已结束。` : '';
+      $('composer').hidden = !!note;
+      $('ended').hidden = !note;
+      setHTML($('ended'), note);
+      if (!note) {
+        $('prompt').placeholder = tab === 'changes' ? `哪里要改？告诉 ${h.name}…`
+          : x.status === 'waiting' ? '不允许的话，告诉它该怎么做…'
+          : x.status === 'done' ? `继续追问 ${h.name}…` : `补充说明，${h.name} 会在下一步读到…`;
+        $('hint').textContent = 'Enter 发送 · Shift+Enter 换行';
+        $('send').setAttribute('aria-label', '发送');
+        $('send').disabled = !$('prompt').value.trim();
+      }
+    }
+
+    function entryHTML(e, i, c, live, ended) {
+      const { p, a, s } = c, h = HARNESS[a.harness];
+      if (e.t === 'user') return s
+        ? `<div class="m user from"><div class="from-l">${h.name} 派来的任务</div><div class="bubble">${esc(e.text)}</div></div>`
+        : `<div class="m user"><div class="bubble">${esc(e.text)}</div></div>`;
+      if (e.t === 'text') return `<div class="m text">${esc(e.text)}</div>`;
+      if (e.t === 'tool') {
+        return `<div class="m tool${live ? ' live' : ''}" style="--c:${h.color}" title="${esc(`${e.name} ${e.arg}`)}"><span class="tn">${esc(e.name)}</span>`
+          + `<span class="ta">${esc(e.arg)}</span>${e.out ? `<span class="to">→ ${esc(e.out)}</span>` : ''}</div>`;
+      }
+      if (e.t === 'commit') {
+        const col = ui.mode === 'branch' ? branchColor(p, e.c.branch) : e.c.author === 'human' ? HUMAN_DOT : HARNESS[e.c.author].color;
+        return `<button class="m commit" data-i="${i}" title="在图中定位这个提交"><i style="background:${col}"></i><span class="lbl">提交</span>`
+          + `<span class="cmsg">${esc(e.c.msg)}</span><span class="csha">${sha(e.c.id)}</span></button>`;
+      }
+      if (e.t === 'spawn') {
+        const done = e.s.status === 'done';
+        return `<button class="m spawn" data-i="${i}" title="查看 ${esc(e.s.name)} 的对话"><span class="lbl">子 agent</span>`
+          + `<span class="who" style="color:${done ? 'var(--secondary)' : h.color}">${esc(e.s.name)}</span>${done ? '<span class="state done">完成</span>' : ''}`
+          + `<span class="sact">${esc(e.s.activity)}</span><span class="chev">›</span></button>`;
+      }
+      if (e.t === 'ask') {
+        const open = !e.res && !ended && a.status === 'waiting';
+        return `<div class="m ask${open ? '' : ' resolved'}"><div class="ask-t">${esc(e.text)}</div><code>${esc(e.cmd)}</code>`
+          + (open
+            ? `<div class="ask-b"><button class="btn allow" data-act="allow" data-id="${a.id}">允许</button><button class="btn" data-act="deny" data-id="${a.id}">拒绝</button><span class="res">或直接回复，告诉它怎么做</span></div>`
+            : `<div class="res">${e.res === 'deny' ? '已拒绝' : e.res === 'allow' ? '已允许' : '未处理'}</div>`)
+          + '</div>';
+      }
+      return `<div class="m note">${esc(e.text)}</div>`;
+    }
+
+    // ---- The 改动 tab: what the worktree's branch changes against main, the review on it, and the merge under it.
+    const base = path => path.slice(path.lastIndexOf('/') + 1);
+    const filesOf = (p, b) => [...(p.changes[b]?.values() || [])].sort((x, y) => x.path.localeCompare(y.path));
+    const ST = { A: '新文件', M: '修改', D: '删除' };
+    const stat = (add, del) => `<span class="diff"><span class="add">+${add}</span><span class="del">−${del}</span></span>`;
+    // Five blocks, green for added lines and red for removed, the way GitHub sums up a file.
+    const bar = (add, del) => {
+      const t = add + del, g = t ? Math.round(add / t * 5) : 0;
+      return `<span class="dstat" aria-hidden="true">${[0, 1, 2, 3, 4].map(i => `<i class="${i < g ? 'a' : t ? 'd' : ''}"></i>`).join('')}</span>`;
+    };
+    // The review on a worktree: its reviewer agent and the comments left so far. A comment the author has fixed is done.
+    function reviewOf(wt) {
+      const r = wt.agents.find(a => a.role === 'review');
+      if (!r) return null;
+      const said = new Set((r.log || []).filter(e => e.t === 'tool' && e.name === 'Comment').map(e => e.arg));
+      const comments = (REVIEW[r.id] || []).map(([file, line, text]) => ({ file, line, text, key: `${base(file)}:${line}`, who: r.harness }))
+        .filter(n => r.status === 'done' || said.has(n.key)).map(n => ({ ...n, done: !!wt.resolved?.has(n.key) }));
+      return { agent: r, comments };
+    }
+    const noteHTML = n => `<div class="dcm${n.done ? ' done' : ''}" data-key="${esc(n.key)}">${avatar(n.who)}<div class="dcm-t">`
+      + `<b>${HARNESS[n.who].name}</b>${n.done ? '<span class="rv-ok">已处理</span>' : ''}<div>${esc(n.text)}</div></div></div>`;
+    // One hunk of a file, numbered the way git shows it; a review comment sits under the line it is about.
+    function diffHTML(f, notes) {
+      const d = DIFFS[f.path], shown = new Set();
+      if (!d) return `<div class="dv"><div class="dv-in"><div class="dx">原型里没有模拟这个文件的 diff。</div>${notes.map(noteHTML).join('')}</div></div>`;
+      const [[o0, n0], ...lines] = d;
+      let o = o0, n = n0, body = '';
+      for (const l of lines) {
+        const k = l[0], cls = k === '+' ? ' a' : k === '-' ? ' d' : '';
+        body += `<div class="dl${cls}"><span class="ln">${k === '-' ? o : n}</span><span class="sg">${k === '+' ? '+' : k === '-' ? '−' : ''}</span><span class="dt">${esc(l.slice(1))}</span></div>`;
+        if (k !== '+') o++;
+        if (k === '-') continue;
+        for (const x of notes) if (x.line === n) { body += noteHTML(x); shown.add(x); }
+        n++;
+      }
+      const olds = lines.filter(l => l[0] !== '+').length, news = lines.filter(l => l[0] !== '-').length;
+      return `<div class="dv"><div class="dv-in"><div class="dh">@@ -${o0},${olds} +${n0},${news} @@</div>${body}`
+        + `${notes.filter(x => !shown.has(x)).map(noteHTML).join('')}</div></div>`;
+    }
+    function fileHTML(f, open, notes) {
+      const name = base(f.path), todo = notes.some(n => !n.done);
+      return `<div class="rv-f${open ? ' open' : ''}"><button class="rv-fh" data-file="${esc(f.path)}" aria-expanded="${open}" title="${esc(f.path)}">`
+        + `<span class="st st-${f.st}" title="${ST[f.st]}">${f.st}</span>`
+        + `<span class="fp"><span class="fd">${esc(f.path.slice(0, -name.length))}</span><span class="fn">${esc(name)}</span></span>`
+        + (notes.length ? `<span class="fc${todo ? '' : ' done'}" title="${notes.length} 条 review 评论">${notes.length}</span>` : '')
+        + `${stat(f.add, f.del)}${bar(f.add, f.del)}<span class="chev">›</span></button>${open ? diffHTML(f, notes) : ''}</div>`;
+    }
+    function commitRow(p, x) {
+      const col = ui.mode === 'branch' ? branchColor(p, x.branch) : x.author === 'human' ? HUMAN_DOT : HARNESS[x.author].color;
+      return `<button class="rv-cm" data-commit="${x.id}" title="在图中定位这个提交"><i style="background:${col}"></i>`
+        + `<span class="cmsg">${esc(x.msg)}</span><span class="csha">${sha(x.id)}</span><span class="time">${age(x.ts)}</span></button>`;
+    }
+    // The tab's content as five fixed slots, so patch() only redraws the ones that changed (open diffs stay put).
+    function reviewItems(c) {
+      const { p, wt } = c, b = wt.branch, s = gitState(p, b);
+      const files = filesOf(p, b), own = p.commits.filter(x => x.branch === b).reverse();
+      const add = files.reduce((n, f) => n + f.add, 0), del = files.reduce((n, f) => n + f.del, 0);
+      const rv = reviewOf(wt), notes = rv ? rv.comments : [], author = wt.agents.find(x => !x.role && x.harness !== 'human');
+      const where = wt.merged ? '已合并到 main' : b === 'main' ? '' : s.behind ? `落后 main ${s.behind} 个提交` : '基于最新的 main';
+      const sum = `<div class="rv-sum"><span>${files.length} 个文件</span>${stat(add, del)}<span>· ${own.length} 个提交</span><span class="base">${where}</span></div>`;
+      let review = '<div hidden></div>';
+      if (rv) {
+        const r = rv.agent, rh = HARNESS[r.harness], todo = notes.filter(n => !n.done).length;
+        const list = notes.map(n => `<button class="rv-c${n.done ? ' done' : ''}" data-goto="${esc(n.file)}" data-key="${esc(n.key)}" title="打开 ${esc(base(n.file))}">`
+          + `<span class="rv-k"><span class="rv-at">${esc(n.key)}</span>${n.done ? '<span class="rv-ok">已处理</span>' : ''}</span>`
+          + `<span class="rv-t">${esc(n.text)}</span></button>`).join('');
+        const foot = author?.fixing ? `<span class="rv-note">${HARNESS[author.harness].name} 正在按评论修改…</span>`
+          : author && todo ? `<button class="btn" data-review="send">把 ${todo} 条评论发给 ${HARNESS[author.harness].name}</button>` : '';
+        review = `<div class="rv-box rv-rev"><div class="rv-bh">${avatar(r.harness)}<span class="who" style="color:${rh.color}">${rh.name}</span><span class="role">review</span>`
+          + `<span class="state ${r.status}"${r.status === 'running' ? ` style="color:${rh.color}"` : ''}>${r.status === 'done' ? '完成' : '进行中'}</span>`
+          + `<span class="rv-n">${notes.length ? `${notes.length} 条评论` : '还没有评论'}</span></div>${list}${foot ? `<div class="rv-bf">${foot}</div>` : ''}</div>`;
+      }
+      let dirty = '<div hidden></div>';
+      if (!wt.merged && wt.add + wt.del) {
+        // Which files the agent touched since its last commit.
+        const log = author?.log || [], since = log.slice(log.findLastIndex(e => e.t === 'commit') + 1);
+        const touched = [...new Set(since.filter(e => e.t === 'tool' && (e.name === 'Edit' || e.name === 'Write')).map(e => base(e.arg)))].slice(-2);
+        dirty = `<div class="rv-box rv-dirty"><span>还没提交</span>${stat(wt.add, wt.del)}`
+          + (touched.length ? `<span class="rv-at">${author.status === 'running' ? '正在改' : '改了'} ${esc(touched.join('、'))}</span>` : '')
+          + (s.commit ? '' : `<button class="btn" data-act="commit" data-id="${wt.id}" title="${esc(gitCmd(p, 'commit', b, s))}">提交</button>`) + '</div>';
+      }
+      const list = files.length ? `<div class="rv-list">${files.map(f => fileHTML(f, c.open.has(f.path), notes.filter(n => n.file === f.path))).join('')}</div>`
+        : '<div class="rv-empty">这个分支相对 main 还没有改动。</div>';
+      const commits = own.length ? `<div><div class="rv-h">提交</div><div class="rv-list">${own.map(x => commitRow(p, x)).join('')}</div></div>` : '<div hidden></div>';
+      return [sum, review, dirty, `<div><div class="rv-h">文件</div>${list}</div>`, commits];
+    }
+    // Under the tab: whether the branch can go into main, and the button that does it.
+    function decideHTML(c) {
+      const { p, wt } = c, b = wt.branch, s = gitState(p, b);
+      if (wt.merged) return `<div class="dz-l"><span class="dz ok">已合并到 main</span><span class="dz-w quiet">worktree 还在磁盘上</span></div>`
+        + `<button class="btn" data-act="prune" data-id="${wt.id}" title="${esc(gitCmd(p, 'delete', b, s))}">移除 worktree</button>`;
+      const rv = reviewOf(wt), todo = rv ? rv.comments.filter(n => !n.done).length : 0;
+      const warn = s.merge ? '' : todo ? `还有 ${todo} 条 review 评论没处理`
+        : rv && rv.agent.status !== 'done' ? `${HARNESS[rv.agent.harness].name} 的 review 还没结束` : s.behind ? `落后 main ${s.behind} 个提交` : '';
+      return `<div class="dz-l"><span class="dz${s.merge ? '' : ' ok'}">${esc(s.merge || '可以合并')}</span>${warn ? `<span class="dz-w">${esc(warn)}</span>` : ''}</div>`
+        + `<button class="btn merge" data-act="merge" data-id="${wt.id}"${s.merge ? ' aria-disabled="true"' : ''} title="${esc(s.merge || gitCmd(p, 'merge', b, s))}">合并到 main</button>`;
+    }
+    // The first time the tab opens for a worktree, files with open review comments are expanded.
+    function showChanges(c) {
+      c.tab = 'changes';
+      if (c.seen) return;
+      c.seen = true;
+      for (const n of reviewOf(c.wt)?.comments || []) if (!n.done) c.open.add(n.file);
+    }
+    // 把评论发给…: the open comments go to the worktree's author as one message, and the panel follows that conversation.
+    function sendReview(c) {
+      const { p, wt } = c, rv = reviewOf(wt), author = wt.agents.find(x => !x.role && x.harness !== 'human');
+      const todo = rv ? rv.comments.filter(n => !n.done) : [];
+      if (!author || !todo.length || author.fixing) return;
+      deliver(author, `${HARNESS[rv.agent.harness].name} 的 review 有 ${todo.length} 条评论，逐条改完再提交：\n`
+        + todo.map((n, i) => `${i + 1}. ${n.key} ${n.text}`).join('\n'));
+      author.fixing = todo.map(n => n.key);
+      author.work ||= rnd(5, 9);
+      openChat(p, author);
+    }
+
+    // ---- New tasks. A task is an agent with your prompt, in a worktree. kind 'new' forks a new branch off commit base
+    // into a new worktree; 'branch' checks out branch b, which has none, into a new one; 'here' starts in worktree wt,
+    // where nobody is working. The panel holds the draft while you write it, and the graph shows its outline (ghostOf()).
+    const taskText = new Map(); // what you wrote for a task you haven't started, per project
+    // A task's title is its first sentence; rows cut it off further where they are narrow.
+    function titleOf(text) {
+      const line = text.trim().split('\n')[0].trim(), cut = line.search(/[。！？!?；;]|\.(\s|$)/);
+      const t = (cut > 0 ? line.slice(0, cut) : line).trim();
+      return t.length > 48 ? t.slice(0, 47) + '…' : t;
+    }
+    const taken = (p, b) => p.merged.has(b) || p.commits.some(c => c.branch === b) || p.worktrees.some(w => w.branch === b) || allSubs(p).some(s => s.branch === b);
+    function nameError(p, b) {
+      if (!b) return '写一个分支名';
+      if (b === '@' || /[\s~^:?*[\\\x00-\x1f\x7f]|\.\.|@\{|\/\/|^[-/.]|\/\.|[/.]$|\.lock$/.test(b)) return 'git 不接受这个分支名';
+      return taken(p, b) ? '这个分支已经存在' : '';
+    }
+    const STOP = new Set(['a', 'an', 'the', 'to', 'of', 'for', 'and', 'or', 'in', 'on', 'with', 'is', 'be']);
+    // claude/add-dark-mode from the prompt's first English words, claude/task-3f2a when it has none (a prompt in Chinese,
+    // say). Short, because the worktree folder is named after it and worktree names are never cut off.
+    function suggest(p, d) {
+      const words = (d.text.match(/[A-Za-z][A-Za-z0-9]*/g) || []).map(w => w.toLowerCase()).filter(w => !STOP.has(w)).slice(0, 3);
+      const stem = `${d.h}/${words.join('-').slice(0, 24).replace(/-+$/, '') || `task-${d.tag}`}`;
+      let b = stem, n = 2;
+      while (taken(p, b)) b = `${stem}-${n++}`;
+      return b;
+    }
+    // A new branch follows the prompt and the harness until you name it yourself. ok: the last name that would work,
+    // which the outline and the worktree folder keep while the one you are typing doesn't.
+    function rename(p, d) {
+      if (d.kind === 'new' && !d.named) d.branch = suggest(p, d);
+      if (d.kind !== 'new' || !nameError(p, d.branch)) d.ok = d.branch; // the others carry on with a branch that exists
+      if (d.kind !== 'here') d.path = folderFor(p, d.ok);
+    }
+    // Why the task can't start as it stands ('' when it can). Its commit, branch or worktree may have moved on meanwhile.
+    function draftError(p, d) {
+      if (d.kind === 'here') {
+        const wt = p.worktrees.find(w => w.id === d.wtId);
+        return wt ? takeState(p, wt.branch) : 'worktree 已经移除';
+      }
+      if (d.kind === 'branch') return p.commits.some(c => c.branch === d.branch) ? takeState(p, d.branch) : '分支已经删除';
+      return p.commits.some(c => c.id === d.base) ? nameError(p, d.branch) : '这个提交已经不在了';
+    }
+    // The outline of the task you are writing: its worktree and agent, with the ids the real ones will get, so starting
+    // turns them solid in place. In a worktree that exists only the agent is new.
+    function ghostOf(p) {
+      const d = ui.draft;
+      if (!d || d.p !== p.id) return null;
+      const agent = { id: d.aId, harness: d.h, status: 'draft', task: titleOf(d.text), activity: '', subagents: [], ghost: true };
+      if (d.kind === 'here') {
+        const wt = p.worktrees.find(w => w.id === d.wtId);
+        return wt ? { wt, agent } : null;
+      }
+      return { wt: { id: d.wtId, path: d.path, branch: d.ok, base: d.kind === 'new' ? d.base : null, add: 0, del: 0, agents: [agent], ghost: true }, agent };
+    }
+    // Opened again in the same project (another commit to start from, say), it keeps what you wrote, and its outline
+    // moves over to the new place.
+    function openDraft(p, kind, { base = null, b = null, wt = null } = {}) {
+      const old = ui.draft?.p === p.id ? ui.draft : null, n = ++state.seq;
+      const d = { p: p.id, kind, base, h: old ? old.h : ui.pickH, aId: old ? old.aId : 't' + n, tag: old ? old.tag : sha('t' + n).slice(0, 4),
+        wtId: wt ? wt.id : old && old.kind !== 'here' ? old.wtId : 'wt-t' + n, text: taskText.get(p.id) || '', named: false, branch: wt ? wt.branch : b || '' };
+      if (kind === 'new' && old?.kind === 'new' && old.named) Object.assign(d, { named: true, branch: old.branch });
+      rename(p, d);
+      closeMenu();
+      ui.draft = d;
+      ui.chat = ui.pinned = null;
+      $('prompt').value = d.text;
+      render();
+      fit();
+      reveal(root.querySelector('.row.sel'), { block: 'nearest', inline: 'nearest' });
+      $('prompt').focus({ preventScroll: true });
+    }
+    function closeDraft() {
+      ui.draft = null;
+      render();
+    }
+    function choose(h) {
+      const d = ui.draft;
+      d.h = ui.pickH = h;
+      rename(projectOf(d.p), d);
+      render();
+    }
+    // The panel while you write a task: the header it will have as a conversation, then who does it and where it starts;
+    // the prompt goes in the usual box. The branch field and the harness buttons are never redrawn while you use them.
+    function renderDraft(d) {
+      const p = projectOf(d.p), h = HARNESS[d.h], err = draftError(p, d), title = titleOf(d.text);
+      const wt = d.kind === 'here' ? p.worktrees.find(w => w.id === d.wtId) : null;
+      const color = ui.mode === 'branch' ? (d.kind === 'new' ? nextColor(p) : branchColor(p, d.ok)) : h.color;
+      setHTML($('chat-head'), `<div class="ph1">${avatar(d.h)}<span class="who" style="color:${h.color}">${h.name}</span><span class="state draft">新任务</span>`
+        + `<button class="x" data-close title="关闭（Esc）" aria-label="关闭">${CLOSE}</button></div>`
+        + `<div class="ph-task${title ? '' : ' empty'}">${esc(title || '写下要做什么，第一句就是标题')}</div>`
+        + `<div class="ph-ctx"><span>${esc(p.name)}</span><span class="wt-name">${FOLDER}<span>${esc(wt ? wt.path : d.path)}</span></span>${pill(d.ok, color)}</div>`);
+      for (const id of ['chat-list', 'review', 'decide', 'ended']) $(id).hidden = true;
+      $('composer').hidden = false;
+      patch($('draft'), draftItems(p, d, err));
+      for (const btn of $('draft').querySelectorAll('[data-pick]')) btn.setAttribute('aria-pressed', btn.dataset.pick === d.h);
+      const input = $('branch');
+      if (input) {
+        if (document.activeElement !== input) input.value = d.branch;
+        input.classList.toggle('bad', !!nameError(p, d.branch));
+      }
+      $('prompt').placeholder = d.kind === 'new' ? `要 ${h.name} 做什么？` : `要 ${h.name} 接着做什么？`;
+      $('hint').textContent = 'Enter 开始 · Shift+Enter 换行';
+      $('send').setAttribute('aria-label', '开始');
+      $('send').disabled = !$('prompt').value.trim() || !!err;
+    }
+    // Five slots, as in the 改动 tab: harness, where it starts, the new branch's name, what will run (or why it can't), a tip.
+    function draftItems(p, d, err) {
+      const h = HARNESS[d.h], quiet = b => ui.mode === 'branch' ? branchColor(p, b) : QUIET;
+      const picker = '<div><div class="rv-h">谁来做</div><div class="nt-hs" role="group" aria-label="谁来做">'
+        + ['claude', 'codex', 'pi'].map(k => `<button class="nt-h" aria-pressed="false" data-pick="${k}" style="--c:${HARNESS[k].color}">${avatar(k)}<span>${HARNESS[k].name}</span></button>`).join('')
+        + '</div></div>';
+      let at = '<div hidden></div>', out;
+      const wt = d.kind === 'here' && p.worktrees.find(w => w.id === d.wtId);
+      if (d.kind === 'new') {
+        const c = p.commits.find(x => x.id === d.base);
+        if (c) at = `<div><div class="rv-h">从 ${esc(c.branch)} 上的这个提交分出</div><div class="rv-list">${commitRow(p, c)}</div></div>`;
+        out = `<div><div class="rv-h">将要执行</div><code class="nt-cmd">${esc(`git worktree add -b ${d.branch} ../${d.path} ${sha(d.base)}`)}</code></div>`;
+      } else if (d.kind === 'branch') {
+        const own = p.commits.filter(c => c.branch === d.branch).length, n = behindCount(p, d.branch, new Map(p.commits.map(c => [c.id, c])));
+        at = `<div><div class="rv-h">接着做这个分支</div><div class="nt-at">${pill(d.branch, quiet(d.branch))}<span class="nt-x">${own} 个提交${n ? ` · 落后 main ${n} 个提交` : ''} · 没有 worktree</span></div></div>`;
+        out = `<div><div class="rv-h">将要执行</div><code class="nt-cmd">${esc(`git worktree add ../${d.path} ${d.branch}`)}</code></div>`;
+      } else if (wt) {
+        at = `<div><div class="rv-h">在这个 worktree 里接着做</div><div class="nt-at"><span class="wt-name">${FOLDER}<span>${esc(wt.path)}</span></span>`
+          + `${pill(wt.branch, quiet(wt.branch))}${wt.add + wt.del ? diff(wt) : '<span>无改动</span>'}</div></div>`;
+        out = `<div class="nt-tip">不用 git 命令：${h.name} 直接在这个 worktree 里开一个会话${wt.add + wt.del ? '，没提交的改动留着，它在这基础上接着改' : ''}。</div>`;
+      }
+      if (err) out = `<div class="nt-err" role="alert">${esc(err)}</div>`;
+      const field = d.kind === 'new'
+        ? '<label class="nt-f"><span class="rv-h">新分支</span><input class="nt-in" id="branch" spellcheck="false" autocomplete="off" autocapitalize="off"></label>'
+        : '<div hidden></div>';
+      const tip = `<div class="nt-tip">graph 上的虚线就是它将要出现的位置${d.kind === 'new' ? '。右键别的提交，可以换一个起点' : ''}。</div>`;
+      return [picker, at, field, out || '<div hidden></div>', tip];
+    }
+    // Starts it: the worktree (unless it starts in one that exists), the agent with your prompt; the panel follows the agent.
+    function startTask() {
+      const d = ui.draft, p = projectOf(d.p), text = $('prompt').value.trim();
+      if (!text || draftError(p, d)) { renderChat(); return; }
+      const h = HARNESS[d.h], title = titleOf(text);
+      let wt = p.worktrees.find(w => w.id === d.wtId), cmd = '', where;
+      if (d.kind === 'here') where = `在 worktree ${wt.path} 里开始`;
+      else {
+        wt = { id: d.wtId, path: d.path, branch: d.branch, add: 0, del: 0, agents: [] };
+        if (d.kind === 'new') {
+          wt.base = d.base;
+          cmd = `git worktree add -b ${d.branch} ../${d.path} ${sha(d.base)}`;
+          where = `新 worktree ${d.path}：分支 ${d.branch} 从 ${p.commits.find(c => c.id === d.base).branch} 的 ${sha(d.base)} 分出`;
+        } else {
+          cmd = `git worktree add ../${d.path} ${d.branch}`;
+          where = `把 ${d.branch} 检出到新 worktree ${d.path}`;
+        }
+        p.worktrees.push(wt);
+      }
+      // Its commits are named after the task, typed by the branch's prefix when it has one (fix/…, spike/…).
+      const type = /^(feat|fix|refactor|perf|test|docs|chore|spike|exp)\//.exec(wt.branch)?.[1] || 'feat';
+      if (!MSGS[wt.branch]) p.msgs[wt.branch] = [`${type}: ${title}`, `test: ${title}`, `${type}: 处理边界情况`, 'refactor: 整理实现'];
+      const files = filesOf(p, wt.branch).slice(0, 3).map(f => f.path);
+      const a = { id: d.aId, harness: d.h, status: 'running', task: title, activity: '思考中…', elapsed: 0, subagents: [], brief: true, work: rnd(16, 24),
+        script: files.length ? [...files.flatMap(f => [`Read ${f}`, `Edit ${f}`]), `Bash ${TEST_CMD[p.id]}`] : START_SCRIPT[p.id], ask: START_ASK[p.id] };
+      a.log = [{ t: 'note', text: where }, { t: 'user', text }];
+      wt.agents.push(a);
+      // Its first words come a moment later, ahead of whatever it has started on by then.
+      setTimeout(() => { a.log.splice(2, 0, { t: 'text', text: '收到，先看看相关的代码。' }); render(); }, 900);
+      taskText.delete(p.id);
+      ui.pickH = d.h;
+      ui.draft = null;
+      $('prompt').value = '';
+      toast(`${h.name} 开始了`, cmd);
+      openChat(p, a);
+    }
+
+    function send() {
+      if (ui.draft) { startTask(); return; }
+      const c = ui.chat, ta = $('prompt'), text = ta.value.trim();
+      if (!c || c.s || !text || !c.wt.agents.includes(c.a)) return;
+      deliver(c.a, text);
+      ta.value = '';
+      drafts.delete(c.a);
+      fit();
+      c.tab = 'chat'; // asked from the 改动 tab too: what the agent does about it shows in the conversation
+      c.stick = true;
+      render();
+    }
+    // A message for an agent. Replying to a permission request turns it down and says what to do instead;
+    // a finished agent picks the work up again.
+    function deliver(a, text) {
+      const was = a.status;
+      const ask = a.log.findLast(e => e.t === 'ask' && !e.res);
+      if (ask) ask.res = 'deny';
+      say(a, { t: 'user', text });
+      if (was === 'running') {
+        if (a.work) a.work += rnd(2, 4);
+      } else {
+        a.status = 'running';
+        a.activity = '思考中…';
+        if (was === 'done') { a.elapsed = 0; a.work = rnd(5, 9); }
+      }
+      setTimeout(() => { say(a, { t: 'text', text: ACK[was] || ACK.running }); render(); }, 900);
+    }
+
+    // Find a commit from the transcript in the graph: scroll to it and light it up for a moment.
+    function locate(p, commit) {
+      const row = () => root.querySelector(`.project[data-p="${p.id}"] .row[data-c="${commit.id}"]`);
+      if (!row()) go(p.id); // older commits only appear in the project's full history
+      ui.spot = { c: commit, until: Date.now() + 2400 };
+      render();
+      reveal(row(), { block: 'center', inline: 'nearest', behavior: 'smooth' });
+      setTimeout(render, 2500);
+    }
+
+    $('harness').innerHTML = ['claude', 'codex', 'pi']
+      .map(h => `<button class="chip" data-h="${h}" aria-pressed="true"><svg viewBox="0 0 16 16">${glyph(h, 8, 8, 16, HARNESS[h].color)}</svg>${HARNESS[h].name}</button>`)
+      .join('');
+    $('harness').addEventListener('click', e => {
+      const btn = e.target.closest('[data-h]');
+      if (!btn) return;
+      const h = btn.dataset.h;
+      if (ui.harness.has(h)) ui.harness.delete(h); else ui.harness.add(h);
+      btn.setAttribute('aria-pressed', ui.harness.has(h));
+      render();
+    });
+    $('mode').addEventListener('click', e => {
+      const btn = e.target.closest('[data-mode]');
+      if (!btn) return;
+      ui.mode = btn.dataset.mode;
+      $('mode').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn));
+      render();
+    });
+    $('wts').addEventListener('click', e => { ui.wts = !ui.wts; e.currentTarget.setAttribute('aria-pressed', ui.wts); render(); });
+    $('subs').addEventListener('click', e => { ui.subs = !ui.subs; e.currentTarget.setAttribute('aria-pressed', ui.subs); render(); });
+    $('live').addEventListener('click', e => { ui.live = !ui.live; e.currentTarget.setAttribute('aria-pressed', ui.live); setLive(); });
+    $('legend-btn').addEventListener('click', () => { ui.legend = !ui.legend; renderLegend(); });
+    $('legend').addEventListener('click', e => { if (e.target.closest('[data-close]')) { ui.legend = false; renderLegend(); } });
+    new ResizeObserver(() => document.body.style.setProperty('--legend-h', $('legend').offsetHeight + 'px')).observe($('legend'));
+    $('reset').addEventListener('click', () => { closeMenu(); state = seed(); ui.pinned = ui.chat = ui.draft = null; taskText.clear(); render(); });
+    // Rows hold still under your hand. While the pointer is over a project's "now" band its worktrees keep their order
+    // (render() asks heldProject()), and while it moves over the graph, or a press is down, the live tick holds off
+    // redrawing it: a click is a press and a release on the same element, and swapping rows out in between swallows it.
+    // Whatever was held back catches up, sliding, once the pointer settles or leaves.
+    let pressing = false, pointer = null, moved = 0, held = null, stale = false, settle = null;
+    // Resting on a button in the graph (允许, 拒绝, 合并…) counts as aiming too: that is where a click is about to land.
+    // Checked afresh each time, so once the click has made the button go away the graph moves on.
+    const AIM_MS = 800;
+    const onButton = () => !!(pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest('#root button'));
+    const aiming = () => performance.now() - moved < AIM_MS || onButton();
+    function heldProject() {
+      const el = pointer && document.elementFromPoint(pointer.x, pointer.y);
+      return el?.closest('.now')?.closest('.project')?.dataset.p || null;
+    }
+    // Fires a little after AIM_MS, so a pointer that has just come to rest no longer counts as aiming.
+    const later = () => { clearTimeout(settle); settle = setTimeout(catchUp, AIM_MS + 20); };
+    function catchUp() {
+      clearTimeout(settle);
+      if (!stale) return;
+      if (pressing || aiming()) later();
+      else render();
+    }
+    function track(e, move) {
+      pointer = { x: e.clientX, y: e.clientY };
+      if (move && root.contains(e.target)) moved = performance.now();
+      // Leaving the band that was held lets it re-sort.
+      if (held && e.target.closest?.('.now')?.closest('.project')?.dataset.p !== held) stale = true;
+      later();
+    }
+    function untrack() {
+      pointer = null;
+      moved = 0;
+      if (held) stale = true;
+      catchUp();
+    }
+    document.addEventListener('pointermove', e => track(e, true), true);
+    for (const [type, down] of [['pointerdown', true], ['pointerup', false], ['pointercancel', false]]) {
+      document.addEventListener(type, e => { pressing = down; track(e, false); }, true);
+    }
+    document.documentElement.addEventListener('pointerleave', untrack); // the pointer left the window
+    $('projects').addEventListener('click', e => {
+      const btn = e.target.closest('[data-p]');
+      if (btn) go(btn.dataset.p);
+    });
+    // "2 等你" and friends open the next agent in that state, so repeated clicks walk through all of them.
+    $('sum').addEventListener('click', e => {
+      const btn = e.target.closest('[data-status]');
+      if (!btn) return;
+      const list = scope().flatMap(p => p.worktrees.flatMap(wt => wt.agents.filter(a => a.status === btn.dataset.status).map(a => [p, a])));
+      if (!list.length) return;
+      const i = list.findIndex(([, a]) => ui.chat && !ui.chat.s && ui.chat.a === a);
+      openChat(...list[(i + 1) % list.length]);
+    });
+    root.addEventListener('click', e => {
+      const link = e.target.closest('[data-go]');
+      if (link) { go(link.dataset.go); return; }
+      const sec = e.target.closest('.project'), p = sec && projectOf(sec.dataset.p);
+      if (!p) return;
+      // 新任务 in a project's header starts from the newest commit on main.
+      if (e.target.closest('[data-new]')) { openDraft(p, 'new', { base: tipOf(p, 'main') }); return; }
+      const btn = e.target.closest('[data-act]');
+      if (btn) { act(p, btn.dataset.act, btn.dataset.id); return; }
+      const row = e.target.closest('.row');
+      if (!row || !row.dataset.b) return;
+      // The outline of the task you are writing takes you back to writing it.
+      if ('draft' in row.dataset) { $('prompt').focus(); return; }
+      // Agent and subagent rows open (or, clicked again, close) their conversation; other rows pin their branch.
+      const a = row.dataset.a && p.worktrees.flatMap(w => w.agents).find(x => x.id === row.dataset.a);
+      if (a) { openChat(p, a, row.dataset.s ? a.subagents.find(x => x.id === row.dataset.s) || null : null, true); return; }
+      const target = { p: p.id, b: row.dataset.b };
+      ui.pinned = same(ui.pinned, target) ? null : target;
+      applyFocus();
+    });
+    // Right-click a worktree, agent or branch-tip row for its git actions; anywhere else keeps the browser's menu.
+    root.addEventListener('contextmenu', e => {
+      const row = e.target.closest('.row'), sec = e.target.closest('.project'), p = sec && projectOf(sec.dataset.p);
+      if (row && p && openMenu(p, row.dataset.key, e.clientX, e.clientY)) e.preventDefault();
+    });
+    $('menu').addEventListener('click', e => {
+      const task = e.target.closest('[data-task]'), m = ui.menu;
+      if (task && m && task.getAttribute('aria-disabled') !== 'true') {
+        // Re-checked like the git actions. The commit to start from is the row's, or the branch's newest.
+        const p = projectOf(m.p), base = m.c || headOf(p, m.b);
+        if (task.dataset.task === 'take' ? takeState(p, m.b) : !p.commits.some(c => c.id === base)) { drawMenu(); return; }
+        if (task.dataset.task === 'new') openDraft(p, 'new', { base });
+        else {
+          const wt = p.worktrees.find(w => w.branch === m.b);
+          openDraft(p, wt ? 'here' : 'branch', { b: m.b, wt });
+        }
+        return;
+      }
+      const item = e.target.closest('[data-git]');
+      if (!item || !m || item.getAttribute('aria-disabled') === 'true') return;
+      const p = projectOf(m.p), kind = item.dataset.git, s = gitState(p, m.b);
+      if (s[kind]) { drawMenu(); return; } // things moved on since the menu opened; show why it no longer applies
+      if (kind === 'delete' && !s.wt && !m.confirm) {
+        // Deleting a branch that has no worktree drops its unmerged commits, so the item asks for a second click.
+        m.confirm = true;
+        drawMenu();
+        $('menu').querySelector('[data-git="delete"]').focus();
+        return;
+      }
+      closeMenu();
+      gitDo(p, kind, m.b, s);
+    });
+    $('menu').addEventListener('keydown', e => {
+      const items = [...$('menu').querySelectorAll('.mi:not([aria-disabled="true"])')], i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        items[i < 0 ? (step > 0 ? 0 : items.length - 1) : (i + step + items.length) % items.length]?.focus();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        closeMenu();
+      }
+    });
+    // Like a native menu, it closes on any press outside it, on scroll or resize, and when the window loses focus.
+    document.addEventListener('pointerdown', e => { if (ui.menu && !e.target.closest('#menu')) closeMenu(); }, true);
+    document.addEventListener('scroll', () => closeMenu(), true);
+    window.addEventListener('resize', () => closeMenu());
+    window.addEventListener('blur', () => { closeMenu(); untrack(); });
+    $('panel').addEventListener('click', e => {
+      const d = ui.draft;
+      if (d) {
+        // New task: close it, pick who does it, or find the commit it starts from in the graph.
+        const p = projectOf(d.p), pickBtn = e.target.closest('[data-pick]'), cm = e.target.closest('[data-commit]');
+        const x = cm && p.commits.find(k => k.id === cm.dataset.commit);
+        if (e.target.closest('[data-close]')) closeDraft();
+        else if (pickBtn) choose(pickBtn.dataset.pick);
+        else if (x) locate(p, x);
+        return;
+      }
+      const c = ui.chat;
+      if (!c) return;
+      if (e.target.closest('[data-close]')) { closeChat(); return; }
+      if (e.target.closest('[data-parent]')) { openChat(c.p, c.a); return; }
+      const tab = e.target.closest('[data-tab]');
+      if (tab) {
+        if (tab.dataset.tab === 'changes') showChanges(c);
+        else { c.tab = 'chat'; c.stick = true; }
+        renderChat();
+        return;
+      }
+      const btn = e.target.closest('[data-act]');
+      if (btn) { act(c.p, btn.dataset.act, btn.dataset.id); return; }
+      if (e.target.closest('[data-review="send"]')) { sendReview(c); return; }
+      // 改动 tab: a file opens or closes its diff; a review comment opens its file and scrolls to it; a commit is found in the graph.
+      const file = e.target.closest('[data-file]');
+      if (file) {
+        const f = file.dataset.file;
+        if (c.open.has(f)) c.open.delete(f); else c.open.add(f);
+        renderChat();
+        return;
+      }
+      const note = e.target.closest('[data-goto]');
+      if (note) {
+        c.open.add(note.dataset.goto);
+        renderChat();
+        $('review').querySelector(`.dcm[data-key="${CSS.escape(note.dataset.key)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      const cm = e.target.closest('[data-commit]'), x = cm && c.p.commits.find(k => k.id === cm.dataset.commit);
+      if (x) { locate(c.p, x); return; }
+      const item = e.target.closest('[data-i]'), entry = item && (c.s || c.a).log[+item.dataset.i];
+      if (entry?.t === 'spawn') openChat(c.p, c.a, entry.s);
+      else if (entry?.t === 'commit') locate(c.p, entry.c);
+    });
+    $('prompt').addEventListener('input', e => {
+      const d = ui.draft;
+      if (d) {
+        // Writing a task: its title, its branch name and its outline in the graph follow along.
+        d.text = e.target.value;
+        taskText.set(d.p, d.text);
+        rename(projectOf(d.p), d);
+        fit();
+        render();
+        return;
+      }
+      if (ui.chat) drafts.set(ui.chat.a, e.target.value);
+      fit();
+      $('send').disabled = !e.target.value.trim();
+    });
+    // Naming the new branch yourself; Enter goes on to the prompt, or starts the task when it is written.
+    $('draft').addEventListener('input', e => {
+      const d = ui.draft;
+      if (!d || e.target.id !== 'branch') return;
+      d.branch = e.target.value.trim();
+      d.named = true;
+      rename(projectOf(d.p), d);
+      render();
+    });
+    $('draft').addEventListener('keydown', e => {
+      if (e.target.id !== 'branch' || e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      if ($('prompt').value.trim()) startTask(); else $('prompt').focus();
+    });
+    $('prompt').addEventListener('keydown', e => {
+      // Enter sends and Shift+Enter breaks the line, but never while an IME is still composing (pinyin and the like).
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
+    });
+    $('composer').addEventListener('submit', e => { e.preventDefault(); send(); });
+    // Esc backs out one step at a time: the menu, then the new task or the conversation, then the picked branch.
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || e.isComposing) return;
+      if (ui.menu) closeMenu(); else if (ui.draft) closeDraft(); else if (ui.chat) closeChat(); else if (ui.pinned) { ui.pinned = null; applyFocus(); }
+    });
+
+    render();
+    setLive();
+  </script>
+</body>
+</html>
