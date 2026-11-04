@@ -1,3 +1,5 @@
+[English](README.md) | 简体中文
+
 ![Agent Graph：把 ADE 的主交互元素从「会话」换成「git graph」](assets/cover.png)
 
 # Agent Graph
