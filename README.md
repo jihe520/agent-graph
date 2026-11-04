@@ -41,12 +41,12 @@ agent 的工作最后都落在 git 上。所以换一个主元素：git graph �
 在 ADE 的源码仓库里开一个 agent 会话，发送：
 
 ```text
-把 <本仓库地址> 克隆到一个临时目录，读其中的 PROMPT.md，按它的要求在当前项目里实现。
+把 https://github.com/jihe520/agent-graph 克隆到一个临时目录，读其中的 PROMPT.md，按它的要求在当前项目里实现。
 ```
 
 agent 会先调研你的 ADE，交给你概念映射和实施计划，确认后再分阶段实现。agent 不能联网或执行命令时，把 PROMPT.md、DESIGN.md、index.html 复制进当前项目，再让它读 PROMPT.md。
 
-只想看效果的话，用浏览器打开 index.html。
+只想看效果的话，直接打开[在线预览](https://jihe520.github.io/agent-graph/)，或者用浏览器打开 index.html。
 
 ## 适配不同的 ADE
 
