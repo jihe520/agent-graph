@@ -8,46 +8,124 @@
   <!-- The drawing in assets/icon.svg, inlined so this file still opens on its own. -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='tile' x1='0' y1='0' x2='0' y2='64' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%231c2026'/%3E%3Cstop offset='1' stop-color='%23101215'/%3E%3C/linearGradient%3E%3ClinearGradient id='history' x1='0' y1='50' x2='0' y2='63' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23a3abb8'/%3E%3Cstop offset='1' stop-color='%23a3abb8' stop-opacity='0'/%3E%3C/linearGradient%3E%3ClinearGradient id='spin' x1='25.4' y1='0' x2='51.78' y2='0' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23e58a63' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%23e58a63' stop-opacity='.35'/%3E%3Cstop offset='1' stop-color='%23e58a63'/%3E%3C/linearGradient%3E%3Cmask id='gaps'%3E%3Crect width='64' height='64' fill='%23fff'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='39' cy='24' r='9.7'/%3E%3Ccircle cx='19' cy='50' r='6.5'/%3E%3C/g%3E%3C/mask%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23tile)'/%3E%3Crect x='.5' y='.5' width='63' height='63' rx='13.5' fill='none' stroke='%23fff' stroke-opacity='.09'/%3E%3Cg fill='none' stroke-width='4.6' stroke-linecap='round' mask='url(%23gaps)'%3E%3Cpath d='M19 12V62' stroke='url(%23history)'/%3E%3Cpath d='M39 24V31C39 40.5 19 40.5 19 50' stroke='%23e58a63'/%3E%3C/g%3E%3Cpath d='M27.22 30.8A13.6 13.6 0 1 1 51.78 19.35' fill='none' stroke='url(%23spin)' stroke-width='3.6' stroke-linecap='round'/%3E%3Ccircle cx='19' cy='50' r='4.8' fill='%23a3abb8'/%3E%3Ccircle cx='39' cy='24' r='8' fill='%23e58a63'/%3E%3C/svg%3E">
   <style>
+    /* Design tokens, modeled on the theme of CUI (github.com/yappologistic/CUI, src/cui_theme.c): a calm neutral
+       palette, status colors only for status, one categorical series for harnesses and branches, hairline borders,
+       shadows on floating layers only, and one radius scale nested concentrically. Neutrals are achromatic OKLCH grays
+       stepped in lightness; the status tones share a lightness, so none shouts louder than the others.
+       The script reads its colors from here too, so this is the one place to change them. */
     :root {
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
-      color: #e8e9eb; background: #101215; font-synthesis: none; -webkit-font-smoothing: antialiased;
-      --text: #e8e9eb; --secondary: #a4a9b1; --muted: #6d737c;
-      --line: rgba(255,255,255,.075); --hover: rgba(255,255,255,.035); --now: #15181c; --page: #101215;
-      --waiting: #f0b54a; --done: #86cf98; --del: #e78585;
+      /* Neutrals, oklch(L 0 0). Contrast is against --bg. */
+      --bg: oklch(.18 0 0);                 /* #121212  page */
+      --surface: oklch(.21 0 0);            /* #181818  the "now" band, the conversation panel, the legend */
+      --surface-raised: oklch(.24 0 0);     /* #1f1f1f  menus, toasts, fields */
+      --surface-sunk: oklch(.16 0 0);       /* #0d0d0d  diffs and commands */
+      --fg: oklch(.96 0 0);                 /* #f2f2f2  16.7:1 */
+      --text-2: oklch(.77 0 0);             /* #b4b4b4   9.0:1 */
+      --text-3: oklch(.64 0 0);             /* #8c8c8c   5.6:1, still AA for small text */
+      --border: oklch(.29 0 0);             /* #2b2b2b  hairlines */
+      --border-subtle: oklch(.25 0 0);      /* #222222  dividers inside a surface */
+      --border-strong: oklch(.515 0 0);     /* #676767  focused fields, line numbers */
+      --connector: oklch(.4 0 0);           /* #484848  tree lines, tool-call bullets */
+      /* States are the foreground at a low alpha, so they read the same on any surface. */
+      --hover: oklch(.96 0 0 / .05);
+      --active: oklch(.96 0 0 / .075);      /* pressed, selected */
+      --fill: oklch(.96 0 0 / .065);        /* secondary buttons, chips */
+      --fill-hover: oklch(.96 0 0 / .1);
+      --focus: oklch(.73 .15 250 / .9);     /* #55adff  focus rings, the spotlit row */
+      --on-tone: #141416;                   /* text on a solid status color */
+      --on-danger: #1a0a0c;
+
+      /* Status tones. */
+      --success: oklch(.79 .14 162);        /* #55d69f */
+      --warning: oklch(.83 .12 78);         /* #f2bd68 */
+      --danger: oklch(.7 .16 24);           /* #f2716c */
+      --info: oklch(.79 .095 236);          /* #7cc4f0 */
+
+      /* Series: six categorical colors, ordered so that neighbours (the last and the first too) stay apart under
+         color blindness. Harnesses take the first three; branches, colored by branch, take them in turn. */
+      --series-1: #4892ed;                  /* blue */
+      --series-2: #e8672e;                  /* orange */
+      --series-3: #20ab7a;                  /* aqua */
+      --series-4: #8e7fe6;                  /* violet */
+      --series-5: #d17f00;                  /* yellow */
+      --series-6: #dd6197;                  /* magenta */
+
+      /* What the graph's colors mean. */
+      --waiting: var(--warning);
+      --done: var(--success);
+      --running: var(--text-2);             /* the running count, which no single harness owns */
+      --add: var(--success);
+      --mod: var(--warning);
+      --del: var(--danger);
+      --harness-claude: var(--series-2);
+      --harness-codex: var(--series-1);
+      --harness-pi: var(--series-3);
+      --harness-human: oklch(.86 0 0);      /* #d1d1d1  you, and your commits */
+      --lane-trunk: oklch(.7 0 0);          /* #9e9e9e  main */
+      --lane-quiet: oklch(.42 0 0);         /* #4d4d4d  a branch nobody works on */
+      --lane-retired: var(--border-strong); /* merged */
+
+      /* Type: one scale. */
+      --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
       --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --text-xs: 11px;                      /* mono details, captions, counts */
+      --text-sm: 12px;                      /* secondary text, buttons */
+      --text-body: 13px;
+      --text-lg: 15px;                      /* titles */
+
+      /* Radius, nested concentrically: a menu item (8) sits 6 inside its menu (14). */
+      --radius-small: 6px;                  /* labels, small buttons */
+      --radius-item: 8px;                   /* rows, menu items, toolbar buttons */
+      --radius-control: 10px;               /* fields, cards, the "now" band */
+      --radius-panel: 14px;                 /* menus, the legend, the composer */
+      --radius-full: 999px;
+
+      /* Elevation: floating layers only. */
+      --shadow-float: 0 1px 3px rgb(0 0 0 / .24), 0 14px 36px -4px rgb(0 0 0 / .4);
+
+      /* Motion. */
+      --t-highlight: 100ms;                 /* menu items */
+      --t-hover: 140ms;
+      --t-state: 180ms;                     /* focus dimming, disclosure */
+      --t-enter: 260ms;
+      --t-exit: 160ms;
+      --ease: cubic-bezier(.22, 1, .36, 1);
+
       --gx: 160px;
+      font-family: var(--font); color: var(--fg); background: var(--bg); font-synthesis: none; -webkit-font-smoothing: antialiased;
     }
     * { box-sizing: border-box; }
     body { margin: 0; }
-    button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
-    button:focus-visible { outline: 2px solid #8ea7ef; outline-offset: 2px; }
+    button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer;
+      transition: background-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease); }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-    .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 18px; background: rgba(16,18,21,.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 18px; background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
     .projects { display: flex; align-items: center; gap: 2px; margin-right: 6px; }
-    .projects > svg { width: 16px; height: 16px; margin: 0 6px 0 2px; fill: none; stroke: var(--secondary); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-    .projects button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; color: var(--muted); }
-    .projects button:hover { color: var(--secondary); background: var(--hover); }
-    .projects button[aria-pressed="true"] { color: var(--text); font-weight: 600; background: rgba(255,255,255,.07); }
-    .projects .n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; color: #1d1606; background: var(--waiting); }
-    .projects .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--secondary); }
+    .projects > svg { width: 16px; height: 16px; margin: 0 6px 0 2px; fill: none; stroke: var(--text-2); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .projects button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--radius-item); font-size: var(--text-body); color: var(--text-3); }
+    .projects button:hover { color: var(--text-2); background: var(--hover); }
+    .projects button[aria-pressed="true"] { color: var(--fg); font-weight: 600; background: var(--active); }
+    .projects .n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 700; line-height: 16px; text-align: center; color: var(--on-tone); background: var(--waiting); }
+    .projects .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); }
     .sum { display: flex; gap: 2px; }
-    .sum button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-size: 12px; color: var(--secondary); }
-    .sum button:hover { background: var(--hover); color: var(--text); }
+    .sum button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: var(--radius-item); font-size: var(--text-sm); color: var(--text-2); }
+    .sum button:hover { background: var(--hover); color: var(--fg); }
     .sum i { width: 7px; height: 7px; border-radius: 50%; }
     .spacer { flex: 1; }
     .harness { display: flex; gap: 2px; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; color: var(--secondary); }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--radius-item); font-size: var(--text-sm); color: var(--text-2); }
     .chip:hover { background: var(--hover); }
     .chip[aria-pressed="false"] { opacity: .4; }
     .chip svg { width: 14px; height: 14px; }
-    .sep { width: 1px; height: 18px; margin: 0 6px; background: var(--line); }
-    .seg { display: inline-flex; padding: 2px; border-radius: 9px; background: rgba(255,255,255,.035); }
-    .seg button { height: 24px; padding: 0 10px; border-radius: 7px; font-size: 12px; color: var(--muted); }
-    .seg button[aria-pressed="true"] { background: rgba(255,255,255,.085); color: var(--text); }
-    .toggle { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; color: var(--muted); }
-    .toggle:hover { color: var(--secondary); }
-    .toggle[aria-pressed="true"] { color: var(--text); background: rgba(255,255,255,.06); }
-    .live[aria-pressed="true"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #e5534b; vertical-align: 1px; animation: beat 1.4s ease-in-out infinite; }
+    .sep { width: 1px; height: 18px; margin: 0 6px; background: var(--border); }
+    .seg { display: inline-flex; padding: 2px; border-radius: var(--radius-control); background: var(--hover); }
+    .seg button { height: 24px; padding: 0 10px; border-radius: var(--radius-item); font-size: var(--text-sm); color: var(--text-3); }
+    .seg button[aria-pressed="true"] { background: var(--fill-hover); color: var(--fg); }
+    .toggle { height: 28px; padding: 0 10px; border-radius: var(--radius-item); font-size: var(--text-sm); color: var(--text-3); }
+    .toggle:hover { color: var(--text-2); }
+    .toggle[aria-pressed="true"] { color: var(--fg); background: var(--fill); }
+    .live[aria-pressed="true"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--danger); vertical-align: 1px; animation: beat 1.4s ease-in-out infinite; }
 
     /* --legend-h: the open legend's height, so the end of the page can still scroll out from under it. */
     .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 18px calc(80px + var(--legend-h, 0px)); }
@@ -56,50 +134,53 @@
     /* Marks of rows that slide down while others rise past them: under the rising rows (z 3), over their own (z 1). */
     .lanes.sunk { z-index: 2; }
     /* The band's background is a layer of its own, so when rows come or go it trails them (--lag) instead of jumping. */
-    .now { position: relative; border-radius: 12px; }
-    .now::before { content: ""; position: absolute; inset: 0 0 var(--lag, 0px); border-radius: inherit; background: var(--now); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }
-    .row { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 calc(var(--gx) + 2px); border-radius: 8px; font-size: 13px; }
+    .now { position: relative; border-radius: var(--radius-control); }
+    .now::before { content: ""; position: absolute; inset: 0 0 var(--lag, 0px); border-radius: inherit; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); pointer-events: none; }
+    .row { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 calc(var(--gx) + 2px); border-radius: var(--radius-item); font-size: var(--text-body); }
     /* Row highlights are image layers, which leaves background-color free for .moving below. */
-    .row.is-waiting { background: linear-gradient(90deg, rgba(240,181,74,.075), transparent 55%); }
+    .row.is-waiting { background: linear-gradient(90deg, color-mix(in oklab, var(--waiting) 8%, transparent), transparent 55%); }
     .row:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
     .main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
     .l1, .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
     .who { font-weight: 600; }
-    .role { padding: 1px 5px; border-radius: 5px; font-size: 11px; color: var(--secondary); background: rgba(255,255,255,.06); }
-    .state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; flex-shrink: 0; }
+    .role { padding: 1px 5px; border-radius: var(--radius-small); font-size: var(--text-xs); color: var(--text-2); background: var(--fill); }
+    .state { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-sm); flex-shrink: 0; }
     .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    .state em { font-style: normal; color: var(--muted); }
+    .state em { font-style: normal; color: var(--text-3); }
     .state.waiting { color: var(--waiting); }
     .state.done { color: var(--done); }
     .task, .msg, .act, .ask { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .task { color: var(--secondary); }
-    .act { font: 11.5px/1.3 var(--mono); color: var(--muted); }
-    .ask { font-size: 12px; color: var(--waiting); }
+    .task { color: var(--text-2); }
+    .act { font: var(--text-xs)/1.3 var(--mono); color: var(--text-3); }
+    .ask { font-size: var(--text-sm); color: var(--waiting); }
     .l2 .btn { margin-left: 2px; }
-    .btn { flex-shrink: 0; height: 22px; padding: 0 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: rgba(255,255,255,.07); }
-    .btn:hover { background: rgba(255,255,255,.12); }
-    .btn.allow { background: var(--waiting); color: #1d1606; }
-    .btn.merge { background: var(--done); color: #0d1a10; }
-    .btn.allow:hover, .btn.merge:hover { filter: brightness(1.08); }
-    .btn[aria-disabled="true"] { opacity: .4; cursor: default; filter: none; }
-    .meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
-    .pill { display: inline-flex; align-items: center; flex-shrink: 0; height: 19px; padding: 0 7px; border-radius: 6px; font: 500 11.5px var(--mono); color: color-mix(in srgb, var(--c) 78%, white); background: color-mix(in srgb, var(--c) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent); }
-    .pill.tag { color: var(--secondary); background: none; box-shadow: inset 0 0 0 1px var(--line); }
+    .btn { flex-shrink: 0; height: 22px; padding: 0 10px; border-radius: var(--radius-small); font-size: var(--text-sm); font-weight: 500; background: var(--fill); }
+    .btn:hover { background: var(--fill-hover); }
+    /* Solid status buttons; hovered, they step toward the page, like CUI's primary buttons. */
+    .btn.allow { --tone: var(--waiting); }
+    .btn.merge { --tone: var(--done); }
+    .btn.allow, .btn.merge { color: var(--on-tone); background: var(--tone); }
+    .btn.allow:hover, .btn.merge:hover { background: color-mix(in oklab, var(--tone) 86%, var(--bg)); }
+    .btn[aria-disabled="true"] { opacity: .4; cursor: default; }
+    .btn[aria-disabled="true"]:hover { background: var(--tone, var(--fill)); }
+    .meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: var(--text-sm); color: var(--text-3); }
+    /* Branch labels are badges: a tint of the lane's color and no edge, since a label is not a control. */
+    .pill { display: inline-flex; align-items: center; flex-shrink: 0; height: 19px; padding: 0 7px; border-radius: var(--radius-small); font: 500 var(--text-xs) var(--mono); color: color-mix(in oklab, var(--c) 70%, var(--fg)); background: color-mix(in oklab, var(--c) 18%, transparent); }
+    .pill.tag { color: var(--text-2); background: none; box-shadow: inset 0 0 0 1px var(--border); }
     .pill svg { width: 11px; height: 11px; margin: 0 4px 0 -1px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
-    .wt, .behind, .pr, .diff { display: inline-flex; align-items: center; gap: 4px; font: 11.5px var(--mono); }
+    .wt, .behind, .pr, .diff { display: inline-flex; align-items: center; gap: 4px; font: var(--text-xs) var(--mono); }
     .wt svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
-    .pr { color: var(--secondary); }
-    .add { color: var(--done); }
+    .pr { color: var(--text-2); }
+    .add { color: var(--add); }
     .del { color: var(--del); }
-    .tree { flex-shrink: 0; width: 9px; height: 9px; margin: -7px 0 0 4px; border-left: 1.5px solid rgba(255,255,255,.16); border-bottom: 1.5px solid rgba(255,255,255,.16); border-bottom-left-radius: 4px; }
-    .sub-name { flex-shrink: 0; font-size: 12.5px; font-weight: 500; }
-    .sub .act { font-size: 11px; }
+    .tree { flex-shrink: 0; width: 9px; height: 9px; margin: -7px 0 0 4px; border-left: 1.5px solid var(--connector); border-bottom: 1.5px solid var(--connector); border-bottom-left-radius: 4px; }
+    .sub-name { flex-shrink: 0; font-size: var(--text-sm); font-weight: 500; }
     .author { display: grid; place-items: center; flex-shrink: 0; width: 20px; }
-    .av { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: color-mix(in srgb, var(--c) 16%, transparent); }
+    .av { display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-small); background: color-mix(in oklab, var(--c) 18%, transparent); }
     .av svg { width: 14px; height: 14px; }
-    .av.human { border-radius: 50%; background: #34383f; color: #d4d7dc; font-size: 10px; font-weight: 600; }
-    .time { flex-shrink: 0; width: 38px; text-align: right; font-size: 12px; color: var(--muted); }
-    .sha { flex-shrink: 0; width: 58px; font: 11.5px var(--mono); color: var(--muted); }
+    .av.human { --c: var(--harness-human); border-radius: 50%; color: var(--c); font-size: var(--text-xs); font-weight: 600; }
+    .time { flex-shrink: 0; width: 38px; text-align: right; font-size: var(--text-sm); color: var(--text-3); }
+    .sha { flex-shrink: 0; width: 58px; font: var(--text-xs) var(--mono); color: var(--text-3); }
     .gl-codex { font-family: var(--mono); font-weight: 700; letter-spacing: -.04em; }
     .gl-pi { font-family: "Iowan Old Style", "Times New Roman", serif; font-weight: 600; }
     .gl-human { font-weight: 600; }
@@ -109,26 +190,26 @@
     .project { min-width: 0; container: project / inline-size; }
     .main { container: text / inline-size; }
     .phead { display: flex; align-items: center; gap: 10px; height: 28px; margin-bottom: 8px; padding: 0 14px 0 4px; white-space: nowrap; }
-    .pname { flex-shrink: 0; font-size: 14px; font-weight: 600; }
-    button.pname:hover { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
-    .ppath { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 11.5px var(--mono); color: var(--muted); }
-    .pstats { display: flex; flex-shrink: 0; gap: 12px; margin-left: auto; font-size: 12px; color: var(--muted); }
+    .pname { flex-shrink: 0; font-size: var(--text-lg); font-weight: 600; }
+    button.pname:hover { text-decoration: underline; text-decoration-color: var(--text-3); text-underline-offset: 3px; }
+    .ppath { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: var(--text-xs) var(--mono); color: var(--text-3); }
+    .pstats { display: flex; flex-shrink: 0; gap: 12px; margin-left: auto; font-size: var(--text-sm); color: var(--text-3); }
     .pstats span { display: inline-flex; align-items: center; gap: 5px; }
     .pstats i { width: 6px; height: 6px; border-radius: 50%; }
-    .pnew { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; font-size: 12px; color: var(--secondary); box-shadow: inset 0 0 0 1px var(--line); }
-    .pnew:hover { color: var(--text); background: var(--hover); }
+    .pnew { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 7px; border-radius: var(--radius-item); font-size: var(--text-sm); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--border); }
+    .pnew:hover { color: var(--fg); background: var(--hover); }
     .pnew svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-    .row.more { gap: 10px; font-size: 12px; color: var(--muted); }
+    .row.more { gap: 10px; font-size: var(--text-sm); color: var(--text-3); }
     .row.more:hover { background-image: none; }
-    .link { font-size: 12px; color: var(--secondary); }
-    .link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+    .link { font-size: var(--text-sm); color: var(--text-2); }
+    .link:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
 
     /* Worktree rows head each group of agents in the "now" band. */
-    .now .wt-row:not(:first-child)::before { content: ""; position: absolute; top: 0; left: calc(var(--gx) + 2px); right: 14px; height: 1px; background: var(--line); }
-    .wt-name { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font: 500 12px var(--mono); color: var(--secondary); }
+    .now .wt-row:not(:first-child)::before { content: ""; position: absolute; top: 0; left: calc(var(--gx) + 2px); right: 14px; height: 1px; background: var(--border); }
+    .wt-name { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font: 500 var(--text-sm) var(--mono); color: var(--text-2); }
     .wt-name svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
-    .wt-row.is-merged .wt-name { color: var(--muted); }
-    .clean, .idle { font-size: 12px; color: var(--muted); }
+    .wt-row.is-merged .wt-name { color: var(--text-3); }
+    .clean, .idle { font-size: var(--text-sm); color: var(--text-3); }
     .pill > span, .wt-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Narrow project columns: drop the sha and path labels; branch pills shorten with an ellipsis, worktree names never do. */
@@ -152,208 +233,210 @@
     body.chatting .stage { padding-right: var(--panel-w); }
     .row { scroll-margin: 64px 0 16px; }
     .row.agent[data-a], .row.sub { cursor: pointer; }
-    .row.sel, .row.sel:hover { background-image: linear-gradient(rgba(255,255,255,.075), rgba(255,255,255,.075)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
-    .row.spot { background-image: linear-gradient(rgba(142,167,239,.15), rgba(142,167,239,.15)); }
-    .panel { position: fixed; z-index: 9; top: 52px; right: 0; bottom: 0; width: var(--panel-w); display: flex; flex-direction: column; background: #131619; border-left: 1px solid var(--line); }
+    .row.sel, .row.sel:hover { background-image: linear-gradient(var(--active), var(--active)); box-shadow: inset 0 0 0 1px var(--border); }
+    .row.spot { background-image: linear-gradient(color-mix(in oklab, var(--focus) 16%, transparent), color-mix(in oklab, var(--focus) 16%, transparent)); }
+    .panel { position: fixed; z-index: 9; top: 52px; right: 0; bottom: 0; width: var(--panel-w); display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); }
     .panel[hidden], .panel [hidden] { display: none; }
-    .ph { flex-shrink: 0; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line); }
-    .ph1 { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0; font-size: 13px; white-space: nowrap; }
-    .x { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px; color: var(--muted); }
-    .x:hover { color: var(--text); background: var(--hover); }
+    .ph { flex-shrink: 0; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--border); }
+    .ph1 { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0; font-size: var(--text-body); white-space: nowrap; }
+    .x { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: var(--radius-item); color: var(--text-3); }
+    .x:hover { color: var(--fg); background: var(--hover); }
     .x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
     .ph1 .x { margin-left: auto; }
-    .back { flex-shrink: 0; height: 24px; margin-left: -6px; padding: 0 6px; border-radius: 6px; color: var(--secondary); }
-    .back:hover { color: var(--text); background: var(--hover); }
-    .crumb { color: var(--muted); }
-    .ph-task { margin: 6px 24px 0 0; font-size: 14.5px; font-weight: 600; line-height: 1.45; }
-    .ph-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 8px; overflow: hidden; font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .back { flex-shrink: 0; height: 24px; margin-left: -6px; padding: 0 6px; border-radius: var(--radius-small); color: var(--text-2); }
+    .back:hover { color: var(--fg); background: var(--hover); }
+    .crumb { color: var(--text-3); }
+    .ph-task { margin: 6px 24px 0 0; font-size: var(--text-lg); font-weight: 600; line-height: 1.45; }
+    .ph-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 8px; overflow: hidden; font-size: var(--text-sm); color: var(--text-3); white-space: nowrap; }
     .ph-ctx .pill { flex-shrink: 1; min-width: 0; }
     .msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
-    .m { flex-shrink: 0; min-width: 0; font-size: 13px; line-height: 1.6; }
+    .m { flex-shrink: 0; min-width: 0; font-size: var(--text-body); line-height: 1.6; }
     .m.user { align-self: flex-end; max-width: 88%; }
     .m.user.from { align-self: stretch; max-width: none; }
-    .bubble { padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: rgba(255,255,255,.075); white-space: pre-wrap; overflow-wrap: anywhere; }
-    .m.from .bubble { border-radius: 4px 12px 12px 12px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); }
-    .from-l { margin-bottom: 4px; font-size: 11.5px; color: var(--muted); }
-    .m.text { color: #d9dbdf; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .m.tool { display: flex; align-items: baseline; gap: 8px; font: 11.5px/1.5 var(--mono); color: var(--muted); }
+    .bubble { padding: 8px 12px; border-radius: var(--radius-panel) var(--radius-panel) 4px var(--radius-panel); background: var(--active); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .m.from .bubble { border-radius: 4px var(--radius-panel) var(--radius-panel) var(--radius-panel); background: var(--hover); box-shadow: inset 0 0 0 1px var(--border); }
+    .from-l { margin-bottom: 4px; font-size: var(--text-xs); color: var(--text-3); }
+    .m.text { color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .m.tool { display: flex; align-items: baseline; gap: 8px; font: var(--text-xs)/1.5 var(--mono); color: var(--text-3); }
     .m.tool + .m.tool { margin-top: -8px; }
-    .m.tool::before { content: ""; align-self: center; flex-shrink: 0; width: 5px; height: 5px; margin: 0 2px; border-radius: 50%; background: #454a52; }
+    .m.tool::before { content: ""; align-self: center; flex-shrink: 0; width: 5px; height: 5px; margin: 0 2px; border-radius: 50%; background: var(--connector); }
     .m.tool.live::before { width: 9px; height: 9px; margin: 0; border: 1.5px solid var(--c); border-right-color: transparent; background: none; animation: spin .9s linear infinite; }
-    .m.tool .tn { flex-shrink: 0; color: var(--secondary); }
+    .m.tool .tn { flex-shrink: 0; color: var(--text-2); }
     .m.tool .ta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .m.tool .to { flex-shrink: 0; }
-    .m.commit, .m.spawn { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; text-align: left; box-shadow: inset 0 0 0 1px var(--line); }
+    .m.commit, .m.spawn { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: var(--radius-item); font-size: var(--text-body); text-align: left; box-shadow: inset 0 0 0 1px var(--border); }
     .m.commit:hover, .m.spawn:hover { background: var(--hover); }
     .m.commit i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
-    .m .lbl { flex-shrink: 0; font-size: 11.5px; color: var(--muted); }
+    .m .lbl { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-3); }
     .m .cmsg, .m .sact { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .m .csha, .m .sact { font: 11.5px var(--mono); color: var(--muted); }
-    .m .csha, .m .chev { flex-shrink: 0; color: var(--muted); }
-    .m.ask { padding: 10px 12px; border-radius: 10px; background: rgba(240,181,74,.07); box-shadow: inset 0 0 0 1px rgba(240,181,74,.24); }
-    .m.ask .ask-t { font-size: 12.5px; color: var(--waiting); }
-    .m.ask code { display: block; margin-top: 4px; font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+    .m .csha, .m .sact { font: var(--text-xs) var(--mono); color: var(--text-3); }
+    .m .csha, .m .chev { flex-shrink: 0; color: var(--text-3); }
+    .m.ask { padding: 10px 12px; border-radius: var(--radius-control); background: color-mix(in oklab, var(--waiting) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--waiting) 24%, transparent); }
+    .m.ask .ask-t { font-size: var(--text-body); color: var(--waiting); }
+    .m.ask code { display: block; margin-top: 4px; font: var(--text-sm)/1.5 var(--mono); overflow-wrap: anywhere; }
     .m.ask .ask-b { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-    .m.ask.resolved { background: none; box-shadow: inset 0 0 0 1px var(--line); }
-    .m.ask.resolved .ask-t { color: var(--secondary); }
-    .m .res { font-size: 12px; color: var(--muted); }
-    .m.note { align-self: center; font-size: 12px; color: var(--muted); }
-    .composer { flex-shrink: 0; margin: 0 12px 12px; padding: 10px 8px 8px 12px; border-radius: 12px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
-    .composer:focus-within { box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
-    .composer textarea { display: block; width: 100%; min-height: 21px; max-height: 168px; padding: 0 4px 0 0; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: inherit; font-size: 13px; line-height: 1.6; }
-    .composer textarea::placeholder { color: var(--muted); }
+    .m.ask.resolved { background: none; box-shadow: inset 0 0 0 1px var(--border); }
+    .m.ask.resolved .ask-t { color: var(--text-2); }
+    .m .res { font-size: var(--text-sm); color: var(--text-3); }
+    .m.note { align-self: center; font-size: var(--text-sm); color: var(--text-3); }
+    .composer { flex-shrink: 0; margin: 0 12px 12px; padding: 10px 8px 8px 12px; border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border); }
+    .composer:focus-within { box-shadow: inset 0 0 0 1px var(--border-strong); }
+    .composer textarea { display: block; width: 100%; min-height: 21px; max-height: 168px; padding: 0 4px 0 0; border: 0; outline: 0; resize: none; background: none; color: var(--fg); font: inherit; font-size: var(--text-body); line-height: 1.6; }
+    .composer textarea::placeholder { color: var(--text-3); }
     .cbar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-    .cbar .hint { font-size: 11px; color: var(--muted); }
-    .send { display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; border-radius: 8px; color: #101215; background: var(--text); }
+    .cbar .hint { font-size: var(--text-xs); color: var(--text-3); }
+    .send { display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; border-radius: var(--radius-item); color: var(--bg); background: var(--fg); }
     .send:disabled { opacity: .22; cursor: default; }
     .send svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-    .ended { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 12px; padding: 12px 14px; border-radius: 12px; font-size: 12.5px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+    .ended { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 12px; padding: 12px 14px; border-radius: var(--radius-panel); font-size: var(--text-body); color: var(--text-3); box-shadow: inset 0 0 0 1px var(--border); }
 
     /* 改动 tab: what the worktree's branch changes against main, the review on it, and the merge decision under it. */
     .tabs { display: flex; gap: 4px; margin: 6px 0 -12px -8px; }
-    .tab { position: relative; height: 34px; padding: 0 8px; font-size: 12.5px; color: var(--muted); }
-    .tab:hover { color: var(--secondary); }
-    .tab[aria-selected="true"] { color: var(--text); }
-    .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; border-radius: 1px; background: var(--text); }
-    .tab .n { margin-left: 5px; font: 11px var(--mono); color: var(--muted); }
+    .tab { position: relative; height: 34px; padding: 0 8px; font-size: var(--text-body); color: var(--text-3); }
+    .tab:hover { color: var(--text-2); }
+    .tab[aria-selected="true"] { color: var(--fg); }
+    .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; border-radius: 1px; background: var(--fg); }
+    .tab .n { margin-left: 5px; font: var(--text-xs) var(--mono); color: var(--text-3); }
     .tab .flag { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--waiting); vertical-align: 1px; }
     .review { gap: 14px; }
     .review > * { flex-shrink: 0; }
-    .rv-sum { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--secondary); white-space: nowrap; }
-    .rv-sum .base { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
-    .rv-h { margin-bottom: 6px; font-size: 11.5px; color: var(--muted); }
-    .rv-empty { font-size: 12.5px; color: var(--muted); }
-    .rv-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--line); }
-    .rv-rev { background: rgba(126,170,255,.045); box-shadow: inset 0 0 0 1px rgba(126,170,255,.2); }
+    .rv-sum { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--text-body); color: var(--text-2); white-space: nowrap; }
+    .rv-sum .base { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-sm); color: var(--text-3); }
+    .rv-h { margin-bottom: 6px; font-size: var(--text-xs); color: var(--text-3); }
+    .rv-empty { font-size: var(--text-body); color: var(--text-3); }
+    .rv-box { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--radius-control); font-size: var(--text-body); box-shadow: inset 0 0 0 1px var(--border); }
+    .rv-rev { background: color-mix(in oklab, var(--info) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--info) 22%, transparent); }
     .rv-bh { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; white-space: nowrap; }
-    .rv-n { margin-left: auto; font-size: 12px; color: var(--muted); }
+    .rv-n { margin-left: auto; font-size: var(--text-sm); color: var(--text-3); }
     /* A comment: where it is on one line, what it says under it; once handled it folds to one quiet line. */
-    .rv-c { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin: 0 -6px; padding: 5px 6px; border-radius: 6px; line-height: 1.5; text-align: left; }
+    .rv-c { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin: 0 -6px; padding: 5px 6px; border-radius: var(--radius-small); line-height: 1.5; text-align: left; }
     .rv-c:hover { background: var(--hover); }
     .rv-k { display: flex; align-items: center; gap: 6px; }
-    .rv-at { font: 11.5px var(--mono); color: var(--waiting); white-space: nowrap; }
-    .rv-t { color: #d9dbdf; }
-    .rv-c.done .rv-at { color: var(--muted); }
-    .rv-c.done .rv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-    .rv-ok { margin-left: 6px; font-size: 11.5px; color: var(--done); white-space: nowrap; }
+    .rv-at { font: var(--text-xs) var(--mono); color: var(--waiting); white-space: nowrap; }
+    .rv-t { color: var(--fg); }
+    .rv-c.done .rv-at { color: var(--text-3); }
+    .rv-c.done .rv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
+    .rv-ok { margin-left: 6px; font-size: var(--text-xs); color: var(--done); white-space: nowrap; }
     .rv-k .rv-ok { margin-left: 0; }
     .rv-bf { display: flex; align-items: center; margin-top: 6px; }
-    .rv-note { font-size: 12px; color: var(--muted); }
+    .rv-note { font-size: var(--text-sm); color: var(--text-3); }
     .rv-dirty { flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
-    .rv-dirty .rv-at { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-family: inherit; font-size: 12px; }
+    .rv-dirty .rv-at { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-3); font-family: inherit; font-size: var(--text-sm); }
     .rv-dirty .btn { margin-left: auto; }
-    .rv-list { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
-    .rv-f + .rv-f, .rv-cm + .rv-cm { border-top: 1px solid var(--line); }
-    .rv-fh, .rv-cm { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; font-size: 12.5px; text-align: left; }
+    .rv-list { border-radius: var(--radius-control); box-shadow: inset 0 0 0 1px var(--border); overflow: hidden; }
+    .rv-f + .rv-f, .rv-cm + .rv-cm { border-top: 1px solid var(--border); }
+    .rv-fh, .rv-cm { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; font-size: var(--text-body); text-align: left; }
     .rv-fh:hover, .rv-cm:hover { background: var(--hover); }
-    .st { flex-shrink: 0; width: 16px; height: 16px; border-radius: 4px; font: 600 10px/16px var(--mono); text-align: center; }
-    .st-A { color: var(--done); background: rgba(134,207,152,.14); }
-    .st-M { color: #e5c07b; background: rgba(229,192,123,.13); }
-    .st-D { color: var(--del); background: rgba(231,133,133,.14); }
-    .fp { flex: 1; min-width: 0; display: flex; font: 12px var(--mono); white-space: nowrap; }
-    .fd { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
-    .fn { flex-shrink: 0; color: var(--text); }
-    .fc { flex-shrink: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; color: #1d1606; background: var(--waiting); }
-    .fc.done { color: var(--muted); background: rgba(255,255,255,.08); }
+    .st { flex-shrink: 0; width: 16px; height: 16px; border-radius: 4px; font: 600 var(--text-xs)/16px var(--mono); text-align: center; color: var(--c); background: color-mix(in oklab, var(--c) 14%, transparent); }
+    .st-A { --c: var(--add); }
+    .st-M { --c: var(--mod); }
+    .st-D { --c: var(--del); }
+    .fp { flex: 1; min-width: 0; display: flex; font: var(--text-sm) var(--mono); white-space: nowrap; }
+    .fd { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-3); }
+    .fn { flex-shrink: 0; color: var(--fg); }
+    .fc { flex-shrink: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 700; line-height: 16px; text-align: center; color: var(--on-tone); background: var(--waiting); }
+    .fc.done { color: var(--text-3); background: var(--active); }
     .rv-fh .diff { flex-shrink: 0; }
     .dstat { flex-shrink: 0; display: inline-flex; gap: 1px; }
-    .dstat i { width: 6px; height: 6px; border-radius: 1px; background: rgba(255,255,255,.12); }
-    .dstat i.a { background: var(--done); }
+    .dstat i { width: 6px; height: 6px; border-radius: 1px; background: var(--border); }
+    .dstat i.a { background: var(--add); }
     .dstat i.d { background: var(--del); }
-    .rv-fh .chev { flex-shrink: 0; width: 8px; color: var(--muted); transition: transform .15s; }
+    .rv-fh .chev { flex-shrink: 0; width: 8px; color: var(--text-3); transition: transform var(--t-state) var(--ease); }
     .rv-f.open .chev { transform: rotate(90deg); }
     /* The diff scrolls sideways as one block; comments stay at the visible width. */
-    .dv { container-type: inline-size; overflow-x: auto; border-top: 1px solid var(--line); background: rgba(0,0,0,.2); font: 11.5px/1.7 var(--mono); }
+    .dv { container-type: inline-size; overflow-x: auto; border-top: 1px solid var(--border); background: var(--surface-sunk); font: var(--text-xs)/1.7 var(--mono); }
     .dv-in { display: inline-block; min-width: 100%; padding: 4px 0 6px; }
-    .dh { padding: 0 12px; color: var(--muted); }
+    .dh { padding: 0 12px; color: var(--text-3); }
     .dl { display: flex; white-space: pre; }
-    .dl .ln { flex-shrink: 0; width: 38px; padding-right: 8px; text-align: right; color: #50565f; user-select: none; }
-    .dl .sg { flex-shrink: 0; width: 14px; color: var(--muted); user-select: none; }
-    .dl .dt { padding-right: 14px; color: #d4d7dc; }
-    .dl.a { background: rgba(134,207,152,.09); }
-    .dl.a .sg { color: var(--done); }
-    .dl.d { background: rgba(231,133,133,.09); }
+    .dl .ln { flex-shrink: 0; width: 38px; padding-right: 8px; text-align: right; color: var(--border-strong); user-select: none; }
+    .dl .sg { flex-shrink: 0; width: 14px; color: var(--text-3); user-select: none; }
+    .dl .dt { padding-right: 14px; color: var(--fg); }
+    .dl.a { background: color-mix(in oklab, var(--add) 9%, transparent); }
+    .dl.a .sg { color: var(--add); }
+    .dl.d { background: color-mix(in oklab, var(--del) 9%, transparent); }
     .dl.d .sg { color: var(--del); }
-    .dl.d .dt { color: #c7b0b0; }
-    .dx { padding: 6px 12px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; font-size: 12px; color: var(--muted); }
-    .dcm { position: sticky; left: 0; display: flex; gap: 8px; box-sizing: border-box; width: calc(100cqw - 24px); margin: 4px 12px 6px; padding: 8px 10px; border-radius: 8px; font: 12.5px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; white-space: normal; color: #d9dbdf; background: #1d2126; box-shadow: inset 0 0 0 1px rgba(240,181,74,.3); }
-    .dcm.done { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+    .dl.d .dt { color: color-mix(in oklab, var(--del) 25%, var(--text-2)); }
+    .dx { padding: 6px 12px; font-family: var(--font); font-size: var(--text-sm); color: var(--text-3); }
+    .dcm { position: sticky; left: 0; display: flex; gap: 8px; box-sizing: border-box; width: calc(100cqw - 24px); margin: 4px 12px 6px; padding: 8px 10px; border-radius: var(--radius-item); font: var(--text-body)/1.5 var(--font); white-space: normal; color: var(--fg); background: var(--surface-raised); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--waiting) 30%, transparent); }
+    .dcm.done { color: var(--text-3); box-shadow: inset 0 0 0 1px var(--border); }
     .dcm .av { flex-shrink: 0; margin-top: 1px; }
     .dcm-t { min-width: 0; }
-    .dcm-t b { font-weight: 600; color: var(--text); }
+    .dcm-t b { font-weight: 600; color: var(--fg); }
     .rv-cm i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
     .rv-cm .cmsg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rv-cm .csha { flex-shrink: 0; font: 11.5px var(--mono); color: var(--muted); }
-    .decide { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 10px; padding: 9px 9px 9px 14px; border-radius: 12px; background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px var(--line); }
+    .rv-cm .csha { flex-shrink: 0; font: var(--text-xs) var(--mono); color: var(--text-3); }
+    .decide { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin: 0 12px 10px; padding: 9px 9px 9px 14px; border-radius: var(--radius-panel); background: var(--hover); box-shadow: inset 0 0 0 1px var(--border); }
     .dz-l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-    .dz { font-size: 12.5px; color: var(--secondary); }
+    .dz { font-size: var(--text-body); color: var(--text-2); }
     .dz.ok { color: var(--done); }
-    .dz-w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--waiting); }
-    .dz-w.quiet { color: var(--muted); }
-    .decide .btn { height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; }
+    .dz-w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--waiting); }
+    .dz-w.quiet { color: var(--text-3); }
+    .decide .btn { height: 30px; padding: 0 14px; border-radius: var(--radius-item); font-size: var(--text-body); }
 
     /* New task: the panel before there is a conversation. Its header already reads like the conversation it becomes. */
     .draft { gap: 18px; }
     .draft > * { flex-shrink: 0; }
     .nt-hs { display: flex; gap: 6px; }
-    .nt-h { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; height: 36px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; color: var(--secondary); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--line); }
-    .nt-h:hover { color: var(--text); background: var(--hover); }
-    .nt-h[aria-pressed="true"] { color: var(--text); background: color-mix(in srgb, var(--c) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 65%, transparent); }
-    .nt-at { display: flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 10px; border-radius: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--line); }
+    .nt-h { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; height: 36px; padding: 0 8px; border-radius: var(--radius-control); font-size: var(--text-body); color: var(--text-2); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--border); }
+    .nt-h:hover { color: var(--fg); background: var(--hover); }
+    .nt-h[aria-pressed="true"] { color: var(--fg); background: color-mix(in oklab, var(--c) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--c) 65%, transparent); }
+    .nt-at { display: flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 10px; border-radius: var(--radius-control); font-size: var(--text-sm); color: var(--text-3); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--border); }
     .nt-at .pill { flex-shrink: 1; min-width: 0; }
     .nt-at .nt-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .nt-f, .nt-f .rv-h { display: block; }
-    .nt-in { display: block; width: 100%; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; outline: 0; font: 12.5px var(--mono); color: var(--text); background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
-    .nt-in:focus { box-shadow: inset 0 0 0 1px rgba(255,255,255,.26); }
-    .nt-in.bad { box-shadow: inset 0 0 0 1px rgba(231,133,133,.6); }
-    .nt-err { margin-bottom: 8px; font-size: 12px; color: var(--del); }
-    .nt-cmd { display: block; padding: 8px 10px; border-radius: 8px; font: 11.5px/1.6 var(--mono); color: var(--secondary); background: rgba(0,0,0,.22); overflow-wrap: anywhere; }
-    .nt-tip { font-size: 12px; line-height: 1.6; color: var(--muted); }
-    .state.draft { color: var(--muted); }
+    .nt-in { display: block; width: 100%; height: 34px; padding: 0 10px; border: 0; border-radius: var(--radius-control); outline: 0; font: var(--text-sm) var(--mono); color: var(--fg); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border); }
+    .nt-in:focus { box-shadow: inset 0 0 0 1px var(--border-strong); }
+    .nt-in.bad { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--danger) 60%, transparent); }
+    .nt-err { margin-bottom: 8px; font-size: var(--text-sm); color: var(--danger); }
+    .nt-cmd { display: block; padding: 8px 10px; border-radius: var(--radius-item); font: var(--text-xs)/1.6 var(--mono); color: var(--text-2); background: var(--surface-sunk); overflow-wrap: anywhere; }
+    .nt-tip { font-size: var(--text-sm); line-height: 1.6; color: var(--text-3); }
+    .state.draft { color: var(--text-3); }
     .state.draft::before { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
-    .ph-task.empty { color: var(--muted); font-weight: 500; }
+    .ph-task.empty { color: var(--text-3); font-weight: 500; }
     /* In the graph a task you are still writing is an outline: its rows say so, its marks and lane are dashed. */
     .row[data-draft] { cursor: text; }
-    .row.ghost .task.empty, .row .note-l { font-size: 12px; color: var(--muted); }
-    .row.from { background-image: linear-gradient(rgba(255,255,255,.05), rgba(255,255,255,.05)); }
+    .row.ghost .task.empty, .row .note-l { font-size: var(--text-sm); color: var(--text-3); }
+    .row.from { background-image: linear-gradient(var(--hover), var(--hover)); }
 
     /* Right-click menu with the quick git actions; the row it was opened on keeps an outline while it is open. */
-    .row.ctx { background-image: linear-gradient(rgba(142,167,239,.07), rgba(142,167,239,.07)); box-shadow: inset 0 0 0 1.5px rgba(142,167,239,.5); }
-    .menu { position: fixed; z-index: 12; min-width: 236px; max-width: 340px; padding: 5px; border-radius: 10px; font-size: 13px; background: rgba(30,33,38,.98); backdrop-filter: blur(16px); box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 14px 36px rgba(0,0,0,.55); outline: none; }
+    .row.ctx { background-image: linear-gradient(color-mix(in oklab, var(--focus) 7%, transparent), color-mix(in oklab, var(--focus) 7%, transparent)); box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--focus) 55%, transparent); }
+    .menu { position: fixed; z-index: 12; min-width: 236px; max-width: 340px; padding: 6px; border-radius: var(--radius-panel); font-size: var(--text-body); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--border), var(--shadow-float); outline: none; }
     .menu[hidden] { display: none; }
-    .menu-h { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; padding: 5px 8px 9px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .menu-h { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; padding: 5px 8px 9px; border-bottom: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-3); white-space: nowrap; }
     .menu-h .pill { flex-shrink: 1; min-width: 0; }
-    .menu-h .mono { flex-shrink: 0; font: 11.5px var(--mono); color: var(--secondary); }
+    .menu-h .mono { flex-shrink: 0; font: var(--text-xs) var(--mono); color: var(--text-2); }
     .menu-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .mi { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; height: 30px; padding: 0 10px; border-radius: 6px; text-align: left; color: var(--text); }
-    .mi:hover, .mi:focus-visible { outline: none; background: rgba(142,167,239,.18); }
-    .mi[aria-disabled="true"] { cursor: default; color: var(--muted); }
+    .mi { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; height: 30px; padding: 0 10px; border-radius: var(--radius-item); text-align: left; color: var(--fg); transition-duration: var(--t-highlight); }
+    .mi:hover, .mi:focus-visible { outline: none; background: var(--active); }
+    .mi[aria-disabled="true"] { cursor: default; color: var(--text-3); }
     .mi[aria-disabled="true"]:hover { background: none; }
-    .mi-r { flex-shrink: 0; font-size: 12px; color: var(--muted); }
-    .mi-r .mono { font: 11.5px var(--mono); }
-    .mi.danger:not([aria-disabled="true"]) { color: #f0a3a3; }
-    .mi.danger.on { color: #1d0c0c; background: var(--del); }
-    .mi.danger.on .mi-r { color: rgba(29,12,12,.7); }
-    .menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
-    .toast { position: fixed; z-index: 11; top: 64px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: min(640px, 90vw); padding: 8px 14px; border-radius: 10px; font-size: 12.5px; color: var(--text); background: #1d2126; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 10px 28px rgba(0,0,0,.5); opacity: 0; transform: translate(-50%, -6px); pointer-events: none; transition: opacity .18s, transform .18s; }
-    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    .mi-r { flex-shrink: 0; font-size: var(--text-sm); color: var(--text-3); }
+    .mi-r .mono { font: var(--text-xs) var(--mono); }
+    .mi.danger:not([aria-disabled="true"]) { color: var(--danger); }
+    .mi.danger:not([aria-disabled="true"]):hover, .mi.danger:not([aria-disabled="true"]):focus-visible { background: color-mix(in oklab, var(--danger) 10%, transparent); }
+    .mi.danger.on, .mi.danger.on:hover, .mi.danger.on:focus-visible { color: var(--on-danger); background: var(--danger); }
+    .mi.danger.on .mi-r { color: color-mix(in oklab, var(--on-danger) 70%, transparent); }
+    .menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+    .toast { position: fixed; z-index: 11; top: 64px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: min(640px, 90vw); padding: 8px 14px; border-radius: var(--radius-control); font-size: var(--text-body); color: var(--fg); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--border), var(--shadow-float); opacity: 0; transform: translate(-50%, -6px); pointer-events: none; transition: opacity var(--t-exit) var(--ease), transform var(--t-exit) var(--ease); }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); transition-duration: var(--t-enter); }
     body.chatting .toast { left: calc((100vw - var(--panel-w)) / 2); }
-    .toast code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); color: var(--secondary); }
+    .toast code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-sm) var(--mono); color: var(--text-2); }
 
-    /* Legend: what the marks and lines mean. It floats in the graph's bottom-right corner, clear of the conversation panel. */
-    .legend { position: fixed; z-index: 8; right: 16px; bottom: 16px; width: 460px; max-width: calc(100vw - 32px); padding: 8px 10px 12px 14px; border-radius: 12px; font-size: 12px; color: var(--secondary); background: rgba(21,24,28,.94); backdrop-filter: blur(10px); box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 12px 32px rgba(0,0,0,.45); }
+    /* Legend: what the marks and lines mean. It floats in the graph's bottom-right corner, clear of the conversation panel.
+       It sits on --surface, the color the marks are cut out of, so its samples look as they do in the band. */
+    .legend { position: fixed; z-index: 8; right: 16px; bottom: 16px; width: 460px; max-width: calc(100vw - 32px); padding: 8px 10px 12px 14px; border-radius: var(--radius-panel); font-size: var(--text-sm); color: var(--text-2); background: var(--surface); box-shadow: 0 0 0 1px var(--border), var(--shadow-float); }
     body.chatting .legend { right: calc(var(--panel-w) + 16px); max-width: calc(100vw - var(--panel-w) - 32px); }
-    .lg-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .lg-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-body); font-weight: 600; color: var(--fg); }
     .lg-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 16px; margin-right: 4px; }
-    .lg-sec { margin: 6px 0 2px; font-size: 11px; color: var(--muted); }
+    .lg-sec { margin: 6px 0 2px; font-size: var(--text-xs); color: var(--text-3); }
     .lg-grid { display: grid; grid-template-columns: 1fr 1fr; }
     .lg-item { display: flex; align-items: center; gap: 6px; min-height: 24px; line-height: 1.35; }
     .lg-s { flex-shrink: 0; display: grid; place-items: center; min-width: 30px; height: 24px; }
     .lg-s > svg { width: 24px; height: 24px; overflow: visible; }
-    .lg-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 4px 0 0; padding-top: 8px; border-top: 1px solid var(--line); }
+    .lg-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 4px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
     .lg-colors span { display: inline-flex; align-items: center; gap: 5px; }
     .lg-colors i { width: 12px; height: 3px; border-radius: 2px; }
-    .lg-tip { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+    .lg-tip { margin-top: 6px; font-size: var(--text-xs); color: var(--text-3); }
 
     @media (max-width: 820px) {
       :root { --panel-w: 100vw; }
@@ -361,7 +444,7 @@
       body.chatting .legend { display: none; }
     }
 
-    .graph [data-b] { transition: opacity .15s ease; }
+    .graph [data-b] { transition: opacity var(--t-state) var(--ease); }
     .graph.focusing [data-b]:not(.on) { opacity: .16; }
     .graph.focusing .row[data-b]:not(.on) { opacity: .32; }
     .graph .off { opacity: .14 !important; }
@@ -378,8 +461,8 @@
     .pop { animation: pop .45s cubic-bezier(.2, 1.5, .4, 1); }
     .row.fresh { animation: enter .45s ease-out; }
     /* Rows sliding to a new place (see frame()): opaque, so they read cleanly as they pass each other, rising ones on top. */
-    .graph .row.moving { z-index: 1; background-color: var(--page); }
-    .graph .now .row.moving { background-color: var(--now); }
+    .graph .row.moving { z-index: 1; background-color: var(--bg); }
+    .graph .now .row.moving { background-color: var(--surface); }
     .graph .row.moving.rise { z-index: 3; }
     @keyframes fade { from { opacity: 0; } }
     .row.fade { animation: fade .3s ease-out; }
@@ -438,14 +521,20 @@
 
   <script>
     const AGENT_H = 48, SUB_H = 28, ROW_H = 30, WT_H = 34, MORE_H = 40, GAP = 14, LANE_W = 22, PAD = 12, TICK = 1500, RECENT = 6;
-    const PAGE = '#101215', NOW = '#15181c', WAITING = '#f0b54a', DONE = '#86cf98';
-    const TRUNK = '#a3abb8', QUIET = '#4a5058', HUMAN_DOT = '#c3c7cd', RETIRED = '#5c626b';
-    const PALETTE = ['#a3abb8', '#d6a26e', '#8ea7ef', '#68c2b2', '#cf8abd', '#b3c46a', '#e39079', '#84c4d9', '#b39ddb'];
+    // Lanes and commits, after CUI's commit graph: thin lines, solid dots, a merge drawn as a ring around a hole.
+    const LINE = 1.5, DOT_R = 4.5, HOLE_R = 2.2;
+    // Colors are the design tokens in :root; the SVG marks need them as values.
+    const css = getComputedStyle(document.documentElement), token = name => css.getPropertyValue(name).trim();
+    const PAGE = token('--bg'), NOW = token('--surface'), WAITING = token('--waiting'), DONE = token('--done'), RUNNING = token('--running');
+    const TRUNK = token('--lane-trunk'), QUIET = token('--lane-quiet'), RETIRED = token('--lane-retired');
+    const HUMAN_DOT = token('--harness-human'), FADED = token('--text-3'), FADED_EDGE = token('--border-strong');
+    // Branch colors: main keeps the trunk's neutral, the other branches take the series in turn.
+    const PALETTE = [TRUNK, ...[1, 2, 3, 4, 5, 6].map(i => token(`--series-${i}`))];
     const HARNESS = {
-      claude: { name: 'Claude Code', color: '#e58a63' },
-      codex: { name: 'Codex', color: '#7eaaff' },
-      pi: { name: 'Pi', color: '#79d1a6' },
-      human: { name: '你', color: '#d4d7dc' },
+      claude: { name: 'Claude Code', color: token('--harness-claude') },
+      codex: { name: 'Codex', color: token('--harness-codex') },
+      pi: { name: 'Pi', color: token('--harness-pi') },
+      human: { name: '你', color: token('--harness-human') },
     };
     const STATUS = { waiting: ['等你', 0], done: ['完成', 1], running: ['运行中', 2], idle: ['空闲', 3], here: ['', 4], draft: ['新任务', -1] };
     const FOLDER = '<svg viewBox="0 0 16 16"><path d="M2 4.5C2 3.7 2.7 3 3.5 3h3L8 4.5h4.5c.8 0 1.5.7 1.5 1.5v5.5c0 .8-.7 1.5-1.5 1.5h-9c-.8 0-1.5-.7-1.5-1.5z"/></svg>';
@@ -737,7 +826,7 @@
         ' export function total(lines: Line[]): number {', '-  return Math.round(lines.reduce((s, l) => s + l.qty * l.price, 0) * 100) / 100;',
         '+  // 逐行取整再求和，和发票上逐行显示的金额对得上', '+  return lines.reduce((s, l) => s + Math.round(l.qty * l.priceCents), 0);', ' }'],
       'src/ui/tokens.css': [[1, 1],
-        ' :root {', '+  --gray-1: #101215; --gray-2: #15181c; --gray-3: #1d2126;', '+  --radius-s: 6px; --radius-m: 10px;',
+        ' :root {', '+  --gray-1: #121212; --gray-2: #181818; --gray-3: #1f1f1f;', '+  --radius-s: 6px; --radius-m: 10px;',
         '+  --space-1: 4px; --space-2: 8px; --space-3: 12px;', '   --legacy-bg: #101215;'],
       'internal/client/retry.go': [[31, 31],
         ' func (c *Client) do(req *http.Request) (*http.Response, error) {', '-\treturn retry.Do(5, 200*time.Millisecond, func() error {',
@@ -1165,13 +1254,17 @@
     const pill = (b, color, wt) => `<span class="pill" style="--c:${color}" title="${esc(b)}${wt ? ` · 检出在 worktree ${esc(wt)}` : ''}">${wt ? FOLDER : ''}<span>${esc(b)}</span></span>`;
     const diff = wt => `<span class="diff" title="未提交的改动"><span class="add">+${wt.add}</span><span class="del">−${wt.del}</span></span>`;
     const badge = (x, y, color, d) => `<circle cx="${x}" cy="${y}" r="5" fill="${color}" stroke="${NOW}" stroke-width="1.5"/><path d="${d}" fill="none" stroke="${NOW}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // A commit is a solid dot; a merge is a ring, its hole filled with the background it sits on (hole).
+    const commitDot = (x, y, color, merge, attrs = '', hole = PAGE) => merge
+      ? `<circle${attrs} cx="${x}" cy="${y}" r="${(DOT_R + HOLE_R) / 2}" fill="${hole}" stroke="${color}" stroke-width="${DOT_R - HOLE_R}"/>`
+      : `<circle${attrs} cx="${x}" cy="${y}" r="${DOT_R}" fill="${color}"/>`;
     const wtMark = (x, y, color, ghost) => `<rect x="${x - 5.5}" y="${y - 5.5}" width="11" height="11" rx="3" fill="${NOW}" stroke="${color}" stroke-width="1.6"${ghost ? ' stroke-dasharray="2.5 2"' : ''}/>`;
 
     function bead(r, x, y, ph) {
       if (r.kind === 'sub') {
         const color = HARNESS[r.agent.harness].color;
         return r.sub.status === 'done'
-          ? `<circle cx="${x}" cy="${y}" r="4" fill="${NOW}" stroke="#666c75" stroke-width="1.5"/>`
+          ? `<circle cx="${x}" cy="${y}" r="4" fill="${NOW}" stroke="${FADED_EDGE}" stroke-width="1.5"/>`
           : `<circle cx="${x}" cy="${y}" r="6.5" fill="${NOW}"/><circle class="beat" style="animation-delay:${ph(1400)}" cx="${x}" cy="${y}" r="4.5" fill="${color}"/>`;
       }
       const a = r.agent, color = HARNESS[a.harness].color, R = r.lead ? 11 : 9;
@@ -1181,12 +1274,12 @@
       const quiet = a.status === 'done' || a.status === 'idle';
       let s = '';
       if (a.status === 'waiting') s += `<circle class="halo" style="animation-delay:${ph(1800)}" cx="${x}" cy="${y}" r="${R + 1}" fill="none" stroke="${WAITING}" stroke-width="2"/>`;
-      s += `<circle cx="${x}" cy="${y}" r="${R}" fill="${NOW}" stroke="${quiet ? '#5c626b' : color}" stroke-width="1.6"/>`;
+      s += `<circle cx="${x}" cy="${y}" r="${R}" fill="${NOW}" stroke="${quiet ? FADED_EDGE : color}" stroke-width="1.6"/>`;
       if (a.status === 'running') {
         const rr = R + 4, C = 2 * Math.PI * rr;
         s += `<circle class="spin" style="animation-delay:${ph(1600)}" cx="${x}" cy="${y}" r="${rr}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="${(C * .22).toFixed(1)} ${C.toFixed(1)}"/>`;
       }
-      s += glyph(a.harness, x, y, R * 2, quiet ? '#9097a0' : color);
+      s += glyph(a.harness, x, y, R * 2, quiet ? FADED : color);
       const bx = x + R * .75;
       if (a.status === 'done') s += badge(bx, y + R * .75, DONE, `M${bx - 2} ${y + R * .75}l1.4 1.4 2.6-2.8`);
       if (a.status === 'waiting') s += badge(bx, y - R * .75, WAITING, `M${bx} ${y - R * .75 - 2.2}v2.3m0 1.9v.1`);
@@ -1316,7 +1409,7 @@
       const dotColor = c => ui.mode === 'branch' ? branchColor(p, c.branch) : c.author === 'human' ? HUMAN_DOT : HARNESS[c.author].color;
       const ph = period => `-${(now % period / 1000).toFixed(3)}s`;
       const path = (d, color, b, h, o = {}) =>
-        `<path data-b="${esc(b)}" class="${off(h)}${on(b)}" d="${d}" fill="none" stroke="${color}" stroke-width="${o.width || 2}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${o.opacity ? ` opacity="${o.opacity}"` : ''}/>`;
+        `<path data-b="${esc(b)}" class="${off(h)}${on(b)}" d="${d}" fill="none" stroke="${color}" stroke-width="${o.width || LINE}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${o.opacity ? ` opacity="${o.opacity}"` : ''}/>`;
       const curve = (x1, y1, x2, y2) => { const c = (y1 + y2) / 2; return `C${x1} ${c} ${x2} ${c} ${x2} ${y2}`; };
       let edges = '', nodes = '', beads = '';
 
@@ -1343,7 +1436,7 @@
           }
         });
         const col = dotColor(c), merge = c.parents.length > 1, [pc, ps] = pop(c), a = pc ? 1 : alpha(r);
-        nodes += `<circle data-b="${esc(c.branch)}" class="${pc}${off(c.author)}${on(c.branch)}"${ps}${a < 1 ? ` opacity="${a.toFixed(2)}"` : ''} cx="${x1}" cy="${y1}" r="${merge ? 3.8 : 4.3}" fill="${merge ? PAGE : col}" stroke="${merge ? col : PAGE}" stroke-width="2"/>`;
+        nodes += commitDot(x1, y1, col, merge, ` data-b="${esc(c.branch)}" class="${pc}${off(c.author)}${on(c.branch)}"${ps}${a < 1 ? ` opacity="${a.toFixed(2)}"` : ''}`);
       });
 
       // The "now" band. While a worktree rises past others, the marks of the rows sliding down go on the lower layer,
@@ -1355,20 +1448,20 @@
       for (const [b, list] of lists) {
         const x = X(b), color = laneColor(b), h = owner.get(b), to = layer(list[0]);
         // Down to the outlined rows of a task you are writing, the lane is dashed.
-        for (let i = 1; i < list.length; i++) to.edges += path(`M${x} ${Y(list[i - 1])}V${Y(list[i])}`, color, b, h, list[i].ghost ? { dash: '3 4', width: 1.6 } : {});
+        for (let i = 1; i < list.length; i++) to.edges += path(`M${x} ${Y(list[i - 1])}V${Y(list[i])}`, color, b, h, list[i].ghost ? { dash: '3 4' } : {});
         const head = headOf(p, b);
         if (!rowOf.has(head)) continue;
         const ly = Y(list[list.length - 1]), hb = map.get(head).branch, y2 = Y(rows[rowOf.get(head)]);
         const cy = Math.max(ly, y2 - ROW_H);
         const d = hb === b ? `M${x} ${ly}V${y2}` : `M${x} ${ly}V${cy}${curve(x, cy, X(hb), y2)}`;
-        to.edges += path(d, color, b, h, { dash: '2 5', width: 1.6 });
+        to.edges += path(d, color, b, h, { dash: '2 5' });
       }
       // A subagent with its own worktree hangs off its parent agent.
       band.forEach(r => {
         if (r.kind !== 'sub' || !r.sub.branch) return;
         const pr = band.find(o => o.kind === 'agent' && o.agent === r.agent);
         const xa = X(pr.branch) + (pr.lead ? 11 : 9) + 2, xs = X(r.branch), ya = Y(pr);
-        layer(r).edges += path(`M${xa} ${ya}C${xs} ${ya} ${xs} ${ya} ${xs} ${Y(r) - 7}`, HARNESS[r.agent.harness].color, r.branch, r.hz, { dash: '1 4', width: 1.5, opacity: .9 });
+        layer(r).edges += path(`M${xa} ${ya}C${xs} ${ya} ${xs} ${ya} ${xs} ${Y(r) - 7}`, HARNESS[r.agent.harness].color, r.branch, r.hz, { dash: '1 4', opacity: .9 });
       });
       band.forEach(r => {
         const a = alpha(r), faded = s => a < 1 ? `<g opacity="${a.toFixed(2)}">${s}</g>` : s;
@@ -1453,7 +1546,7 @@
         if (r.kind === 'sub') {
           const s = r.sub, done = s.status === 'done';
           return `${open}<div class="main"><div class="l1"><span class="tree"></span>
-            <span class="sub-name" style="color:${done ? 'var(--muted)' : HARNESS[r.agent.harness].color}">${esc(s.name)}</span>
+            <span class="sub-name" style="color:${done ? 'var(--text-3)' : HARNESS[r.agent.harness].color}">${esc(s.name)}</span>
             ${done ? '<span class="state done">完成</span>' : ''}<span class="act">${esc(s.activity)}</span></div></div>
             <div class="meta">${s.branch ? pill(s.branch, laneColor(s.branch)) + `<span class="wt">${FOLDER}${esc(s.path)}</span>` : ''}</div></div>`;
         }
@@ -1489,7 +1582,7 @@
       };
 
       const linked = p.worktrees.length + allSubs(p).filter(s => s.branch).length;
-      const stats = [['waiting', WAITING], ['running', '#d5d8dd'], ['done', DONE]]
+      const stats = [['waiting', WAITING], ['running', RUNNING], ['done', DONE]]
         .map(([s, c]) => { const n = agentCount([p], s); return n ? `<span><i style="background:${c}"></i>${n} ${STATUS[s][0]}</span>` : ''; })
         .join('') + `<span>${linked} 个 worktree</span>`;
       sec.querySelector('.phead').innerHTML = (compact ? `<button class="pname" data-go="${p.id}" title="只看 ${esc(p.name)}">${esc(p.name)}</button>` : `<span class="pname">${esc(p.name)}</span>`)
@@ -1623,9 +1716,9 @@
         <div class="lg-cols">
           <div>
             <div class="lg-sec">上方 · worktree 和 agent</div>
-            ${item(svg(`<path d="M12 11V15" stroke="${c}" stroke-width="2"/>${wtMark(12, 5.5, c)}<circle cx="12" cy="19" r="4" fill="${NOW}" stroke="${c}" stroke-width="1.6"/>`), 'worktree 和里面的 agent')}
-            ${item(svg(`<path d="M12 1V14" stroke="${c}" stroke-width="1.6" stroke-dasharray="2 5" stroke-linecap="round"/><circle cx="12" cy="19" r="4.3" fill="${c}" stroke="${PAGE}" stroke-width="2"/>`), '虚线：worktree 停在的提交')}
-            ${item(svg(`<circle cx="5" cy="5" r="3.5" fill="${NOW}" stroke="${c}" stroke-width="1.5"/><path d="M9 5C19 5 19 5 19 15" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="1 4" stroke-linecap="round"/><circle cx="19" cy="19" r="3" fill="${c}"/>`), '点线：子 agent 开的 worktree')}
+            ${item(svg(`<path d="M12 11V15" stroke="${c}" stroke-width="${LINE}"/>${wtMark(12, 5.5, c)}<circle cx="12" cy="19" r="4" fill="${NOW}" stroke="${c}" stroke-width="1.6"/>`), 'worktree 和里面的 agent')}
+            ${item(svg(`<path d="M12 1V14" stroke="${c}" stroke-width="${LINE}" stroke-dasharray="2 5" stroke-linecap="round"/>${commitDot(12, 19, c)}`), '虚线：worktree 停在的提交')}
+            ${item(svg(`<circle cx="5" cy="5" r="3.5" fill="${NOW}" stroke="${c}" stroke-width="1.5"/><path d="M9 5C19 5 19 5 19 15" fill="none" stroke="${c}" stroke-width="${LINE}" stroke-dasharray="1 4" stroke-linecap="round"/><circle cx="19" cy="19" r="3" fill="${c}"/>`), '点线：子 agent 开的 worktree')}
             ${item(svg(wtMark(12, 12, RETIRED)), '已合并，目录还没移除')}
             ${item('<span class="behind">↓1</span>', '分出来后 main 新增的提交')}
             ${item(diff({ add: 3, del: 1 }), '还没提交的改动')}
@@ -1638,7 +1731,7 @@
             </div>
             <div class="lg-sec">下方 · 提交历史</div>
             ${item(svg(dots.map((col, i) => `<circle cx="${4.5 + i * 7.5}" cy="12" r="3.2" fill="${col}"/>`).join('')), byBranch ? '提交，颜色是分支' : '提交，颜色是作者')}
-            ${item(svg(`<circle cx="12" cy="12" r="3.8" fill="${PAGE}" stroke="${TRUNK}" stroke-width="2"/>`), '合并提交')}
+            ${item(svg(commitDot(12, 12, TRUNK, true, '', NOW)), '合并提交')}
             ${item(pill('main', TRUNK, 'orbit'), '分支检出在 worktree 里')}
             ${item(pill('spike/sqlc', QUIET), '分支没有 worktree')}
           </div>
@@ -1654,7 +1747,7 @@
         return `<button data-p="${p.id}" aria-pressed="${ui.project === p.id}">${esc(p.name)}${badge}</button>`;
       }).join(''));
       const ps = scope();
-      setHTML($('sum'), [['waiting', WAITING], ['running', '#d5d8dd'], ['done', DONE]]
+      setHTML($('sum'), [['waiting', WAITING], ['running', RUNNING], ['done', DONE]]
         .map(([s, c]) => { const n = agentCount(ps, s); return n ? `<button data-status="${s}" title="打开下一个「${STATUS[s][0]}」的 agent"><i style="background:${c}"></i>${n} ${STATUS[s][0]}</button>` : ''; })
         .join(''));
     }
@@ -2003,7 +2096,7 @@
       const where = (path, b) => `<span class="wt-name">${FOLDER}<span>${esc(path)}</span></span>${pill(b, lane(b))}`;
       setHTML($('chat-head'), s
         ? `<div class="ph1"><button class="back" data-parent title="回到 ${h.name} 的对话">‹ ${h.name}</button><span class="crumb">/</span>
-             <span class="who" style="color:${s.status === 'done' ? 'var(--secondary)' : h.color}">${esc(s.name)}</span>${state}${close}</div>
+             <span class="who" style="color:${s.status === 'done' ? 'var(--text-2)' : h.color}">${esc(s.name)}</span>${state}${close}</div>
            <div class="ph-task">${esc(s.task || s.name)}</div>
            <div class="ph-ctx"><span>${esc(p.name)} · 子 agent</span>${s.branch ? where(s.path, s.branch) : where(wt.path, wt.branch)}</div>`
         : `<div class="ph1">${avatar(a.harness)}<span class="who" style="color:${h.color}">${h.name}</span>${a.role ? `<span class="role">${a.role}</span>` : ''}${state}${close}</div>
@@ -2062,7 +2155,7 @@
       if (e.t === 'spawn') {
         const done = e.s.status === 'done';
         return `<button class="m spawn" data-i="${i}" title="查看 ${esc(e.s.name)} 的对话"><span class="lbl">子 agent</span>`
-          + `<span class="who" style="color:${done ? 'var(--secondary)' : h.color}">${esc(e.s.name)}</span>${done ? '<span class="state done">完成</span>' : ''}`
+          + `<span class="who" style="color:${done ? 'var(--text-2)' : h.color}">${esc(e.s.name)}</span>${done ? '<span class="state done">完成</span>' : ''}`
           + `<span class="sact">${esc(e.s.activity)}</span><span class="chev">›</span></button>`;
       }
       if (e.t === 'ask') {
